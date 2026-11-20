@@ -65,3 +65,35 @@ On a disposable test database, run `python tests/tools/india_agent_smoke.py` fro
 - PostgreSQL returned `1` for a test query. The published frontend image served HTML through Caddy in the Linux environment.
 - 189 selected upstream backend tests passed with SQLite, including authentication, manual intake, deduplication, application tracking, location and operations tests. A separate test invocation used temporary runner account directories because the cloud home directory is read-only.
 - The Linux source build and published backend image extraction hit the workspace storage limit. The initial build also required the cloud proxy CA, which was used only in a temporary build context. The full Docker smoke test and Windows validation are pending.
+
+## Phase 2 discovery
+
+Open **Searches → India leadership discovery** and enter up to three employer
+board homepages from Greenhouse, Lever, or Ashby. Use a board only after
+confirming the employer permits automated access. These are example URL shapes:
+
+- `https://job-boards.greenhouse.io/<employer>`
+- `https://jobs.lever.co/<employer>`
+- `https://jobs.ashbyhq.com/<employer>`
+
+Choose **All levels**, **Director and Head**, or **Manager and Senior Manager**,
+then click **Preview jobs**. The search covers AI, machine learning, analytics,
+data science, decision science, business intelligence, and related insights roles.
+The match reasons come from the title and the location metadata supplied by the
+employer feed. A city or country restriction in the actual posting can be more
+specific. Open the employer's posting and confirm eligibility before saving a job,
+especially when the preview flags it for review.
+
+A preview fetches the selected boards once and lists up to 200 candidates. Board
+URLs are entered for each visit. The preview does not write jobs or run in the
+background. **Save to Jobs** adds only the selected posting to the existing feed.
+The employer name uses the board slug in this preview. For other employer sites,
+open **Applications → Log application**, enter the posting link, and choose **New** or **Saved** to add it to the feed.
+
+On Windows, pull the development branch and rebuild from your checkout to pick
+up the backend and dashboard changes:
+
+```powershell
+git pull --ff-only
+docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up --build --wait --wait-timeout 150
+```

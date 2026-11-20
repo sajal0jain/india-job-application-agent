@@ -750,7 +750,7 @@ def job_facets(
     }
 
 
-def _known_posting(db, external_id: str, content_hash: str, url: str | None = None):
+def _known_posting(db, external_id: str, content_hash: str | None, url: str | None = None):
     """The stored row a saved posting already is: the same URL (external_id), the same
     company + title reached by another URL (content_hash), or the same posting under another
     spelling of its link (posting_key, scraper/_shared/postings.py). A duplicate answers with
@@ -762,10 +762,10 @@ def _known_posting(db, external_id: str, content_hash: str, url: str | None = No
     status test covers the ones stored with a hash before that."""
     from backend.scraper._shared.postings import posting_key
     not_ignored = (Job.status.is_(None)) | (Job.status != "ignored")
-    row = db.query(Job).filter(
-        (Job.external_id == external_id)
-        | ((Job.content_hash == content_hash) & not_ignored)
-    ).first()
+    identity = Job.external_id == external_id
+    if content_hash is not None:
+        identity |= (Job.content_hash == content_hash) & not_ignored
+    row = db.query(Job).filter(identity).first()
     key = posting_key(url) if url else None
     if row is None and key:
         row = (db.query(Job).filter(Job.posting_key == key, not_ignored)
@@ -953,7 +953,9 @@ def create_manual_job(body: dict, background_tasks: BackgroundTasks, db: Session
     # content_hash (company+title) for the same posting reached by another URL.
     external_id = make_external_id(company, title, url)
     content_hash = make_content_hash(company, title)
-    existing = _known_posting(db, external_id, content_hash, url)
+    existing = _known_posting(
+        db, external_id, None if body.get("dedup_by_posting") is True else content_hash, url
+    )
     if existing:
         # Report the row, change nothing: an `applied` or `ignored` posting must
         # not fall back to `new` because the user pasted its URL a second time.

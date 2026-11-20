@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import IndiaDiscovery from './IndiaDiscovery'
 import { track } from '../telemetry'
 import { useToasts, ToastStack } from '../Toast'
 import ConfirmDialog from '../ConfirmDialog'
@@ -804,6 +805,7 @@ export default function Searches() {
 
       {/* body */}
       <div className="v2-scroll" style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '14px 30px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <IndiaDiscovery />
         {/* new search card */}
         {newOpen && (
           <Card style={{ padding: 0, borderColor: 'var(--accent)', display: 'flex', flexDirection: 'column' }}>

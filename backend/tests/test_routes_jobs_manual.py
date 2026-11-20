@@ -67,3 +67,13 @@ def test_enrichment_is_queued_for_a_new_row(test_db):
     create_manual_job({"title": "Dev", "company": "Acme", "url": "https://acme.test/j/2"},
                       bg, db=test_db)
     assert [t.func.__name__ for t in bg.tasks] == ["_cache_job_page", "_fetch_and_store_description"]
+
+
+def test_posting_identity_preserves_distinct_same_title_requisitions(test_db):
+    first = _add(test_db, dedup_by_posting=True)
+    second = _add(test_db, dedup_by_posting=True, url="https://acme.test/jobs/2")
+    repeated = _add(test_db, dedup_by_posting=True)
+
+    assert first["created"] and second["created"]
+    assert first["id"] != second["id"]
+    assert repeated == {"id": first["id"], "created": False, "status": "new"}

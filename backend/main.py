@@ -19,6 +19,7 @@ from backend.api.routes_jobs import router as jobs_router
 from backend.api.routes_applications import router as applications_router
 from backend.api.routes_companies import router as companies_router
 from backend.api.routes_searches import router as searches_router
+from backend.api.routes_india_discovery import router as india_discovery_router
 from backend.api.routes_resumes import router as resumes_router
 from backend.api.routes_persona import router as persona_router
 from backend.api.routes_cover_letters import router as cover_letters_router
@@ -636,6 +637,7 @@ app.include_router(jobs_router, prefix="/api")
 app.include_router(applications_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
 app.include_router(searches_router, prefix="/api")
+app.include_router(india_discovery_router, prefix="/api")
 app.include_router(resumes_router, prefix="/api")
 app.include_router(persona_router, prefix="/api")
 app.include_router(cover_letters_router, prefix="/api")

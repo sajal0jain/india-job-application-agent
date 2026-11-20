@@ -10,6 +10,7 @@ services:
       JN_RUNNER_MANAGEMENT: "0"
       JN_SCHEDULER_DISABLED: "1"
       JN_TELEMETRY: "off"
+      JN_APPROVAL_ONLY_AUTOFILL: "1"
       ALLOWED_ORIGINS: http://localhost:8088,http://127.0.0.1:8088
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Approved autofill</title>
+<style>
+  body { font: 14px system-ui, sans-serif; width: 320px; margin: 16px; }
+  form, label { display: grid; gap: 8px; }
+  form { gap: 12px; }
+  input, button { font: inherit; padding: 6px; }
+</style>
+<h1>Approved autofill</h1>
+<form id="fill">
+  <label>Job ID<input name="job" required></label>
+  <label>Dashboard port<input name="port" type="number" value="8088" min="1" max="65535" required></label>
+  <label>Dashboard key<input name="key" type="password" autocomplete="off" required></label>
+  <button>Fill approved fields</button>
+</form>
+<p>Review the form and submit it yourself.</p>
+<p id="status" role="status"></p>
+<script src="fill.js"></script>
+<script src="popup.js"></script>
+</html>

@@ -630,9 +630,12 @@ def _claude_code_token() -> str:
 
 
 async def _call_openai(prompt: str, system: str, model: str, api_key: str, max_tokens: int,
-                       base_url: str | None = None, extra_body: dict | None = None, effort: str = "") -> dict:
+                       base_url: str | None = None, extra_body: dict | None = None, effort: str = "",
+                       max_retries: int | None = None) -> dict:
     """Call the OpenAI API, or any OpenAI-compatible endpoint via base_url."""
     client = _openai_client(api_key, base_url)  # base_url=None → OpenAI default
+    if max_retries is not None:
+        client = client.with_options(max_retries=max_retries)
     kwargs = _openai_kwargs(max_tokens, effort, base_url)
     if extra_body:
         kwargs["extra_body"] = {**kwargs.get("extra_body", {}), **extra_body}

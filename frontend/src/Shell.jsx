@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Newspaper, Search, Building2, Send, FileUser, Mail,
+  Newspaper, Search, Building2, Send, FileUser, Mail, ClipboardCheck,
   Fingerprint, ChartLine, Settings as SettingsIcon,
 } from 'lucide-react'
 import api, { authFailure } from './api'
@@ -30,6 +30,7 @@ const GROUPS = [
     { to: '/companies', label: 'Companies', ready: true, countKey: 'companies', Icon: Building2, warnKey: 'companies' },
   ]},
   { label: 'Apply', items: [
+    { to: '/application-queue', label: 'Application queue', ready: true, Icon: ClipboardCheck },
     { to: '/applications', label: 'Applications', ready: true, countKey: 'apps', Icon: Send },
     { to: '/resumes', label: 'Résumés', ready: true, countKey: 'resumes', Icon: FileUser },
     { to: '/cover-letters', label: 'Cover Letters', ready: true, countKey: 'letters', Icon: Mail },

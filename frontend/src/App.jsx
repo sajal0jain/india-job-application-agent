@@ -13,6 +13,7 @@ import Resumes from './screens/Resumes'
 import ResumeEditor from './screens/ResumeEditor'
 import Companies from './screens/Companies'
 import Searches from './screens/Searches'
+import ApplicationQueue from './screens/ApplicationQueue'
 import Applications from './screens/Applications'
 import CoverLetters from './screens/CoverLetters'
 import CoverLetterEditor from './screens/CoverLetterEditor'
@@ -135,6 +136,7 @@ function App() {
           <Route path="companies" element={<Companies />} />
           <Route path="searches" element={<Searches />} />
           <Route path="applications" element={<Applications />} />
+          <Route path="application-queue/:jobId?" element={<ApplicationQueue />} />
           <Route path="cover-letters" element={<CoverLetters />} />
           <Route path="cover-letters/:id" element={<CoverLetterEditor />} />
           <Route path="settings" element={<Settings />} />

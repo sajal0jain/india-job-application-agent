@@ -476,6 +476,25 @@ del _col
 
 
 # ── Applications ─────────────────────────────────────────────────────────────
+class IndiaWorkflowProfile(AccountScoped, Base):
+    __tablename__ = "india_workflow_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"),
+                        nullable=False, unique=True)
+    facts = Column(JSON, nullable=False, default=list)
+    usage_day = Column(Date, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0)
+
+
+class IndiaWorkflowDraft(AccountScoped, Base):
+    __tablename__ = "india_workflow_drafts"
+
+    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    data = Column(JSON, nullable=False)
+    approval = Column(String(64), nullable=True)
+
+
 class Application(AccountScoped, Base):
     __tablename__ = "applications"
     __table_args__ = (Index("ix_applications_acct_status_updated", "account_id", "status", text("updated_at DESC")),)   # QA F9 / T6-01

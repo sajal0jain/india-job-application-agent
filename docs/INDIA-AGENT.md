@@ -10,7 +10,7 @@ Reviewed three default-branch snapshots on 20 November 2026.
 | [Resume Matcher](https://github.com/srbhr/Resume-Matcher/tree/959e4587dab33d7ff849d822b8182e11e7669dfc) | Apache 2.0. 16 Nov. FastAPI, Next.js, SQLite with a PostgreSQL option, LiteLLM, Playwright, Docker documentation, tests and publishing workflow. Master CV, tailored variants and deterministic ATS PDF text round-trip checks. | Reference its PDF parsing and ATS checks. Preserve Apache notices for any future code reuse. The inspected workflow is resume-focused. |
 | [VedantSagare agent](https://github.com/VedantSagare/job-application-agent/tree/7b8a2a2a82910d1229cfc058956c560af3e8b250) | 17 Nov. No license found at this revision. FastAPI, React/Vite, SQLite, Claude, Playwright and a Windows batch launcher. No Docker setup or automated test workflow found. India-focused sources and supervised filling, but the one-page tailoring code can suggest skills absent from the master CV. | Reference behavior only. No code imported. |
 
-Commit dates are activity signals. Phase 1 is the baseline, and the controls below are planned acceptance criteria.
+Commit dates are activity signals. The numbered phases record the original design. See the implementation notes below for the available workflow.
 
 1. **Baseline.** Build from the pinned JobNavigator checkout. Verify the gateway, database, login, manual job intake, duplicate handling and tracker using synthetic data. Keep the extension unloaded, scheduled jobs disabled and provider keys unset.
 2. **Discovery.** Reuse employer ATS adapters for employer boards that allow this access. Begin with a small allowlist of Greenhouse, Lever and Ashby employer boards and manual links. Match Analytics Manager, Senior Analytics Manager, Data Science Manager, and related BI, Decision Science and Insights manager titles. Normalize Gurugram/Gurgaon and Delhi NCR cities. Require explicit India eligibility for remote roles, and surface ambiguous cases for review. Exercise each rule with saved, synthetic fixtures. Respect published restrictions and rate limits. Keep general board automation and private account endpoints out of the workflow.
@@ -97,3 +97,61 @@ up the backend and dashboard changes:
 git pull --ff-only
 docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up --build --wait --wait-timeout 150
 ```
+
+## Verified application workflow
+
+1. Open **Application queue → Verified master CV facts**. Add your name,
+   email or phone, and at least six substantive CV facts. Record the source
+   of every claim and confirm you checked it. Add answers such as notice
+   period or work authorization as **Screening** facts. This facts list is
+   separate from the upstream Resumes and Persona pages.
+2. Save a job to the feed. Open it from **Application queue → Saved jobs**,
+   check the posting text, and generate a draft. **Local keyword matching**
+   works without a model. The score shows role fit (20 points), location
+   (20), and requirement evidence (60). Each requirement shows a source
+   fact or a gap. Confirm eligibility on the employer site.
+3. Review the selected CV facts. Enter exact screening questions and map
+   them to verified answers. Leave unsupported answers blank. Save the
+   draft, download and review the two-page PDF, then approve that version.
+   The renderer validates page count and extracted fact order. Editing the
+   draft or master facts revokes approval. A changed posting requires a
+   fresh draft.
+4. Open the employer posting. Attach the reviewed PDF and submit yourself.
+   Select **Log submitted application** only after the employer confirms it.
+   The record appears in **Applications**. The queue blocks duplicate records
+   for the same requisition and flags tracked jobs with the same employer and
+   title for review.
+
+### Optional AI
+
+- **OpenRouter.** Add your key under **Settings → Models**. Select Hosted
+  OpenRouter in the queue, enter a model ID, and consent for each run.
+  [OpenRouter model pricing](https://openrouter.ai/models) lists available
+  prices. The workflow sends only posting text, up to 12,000 characters.
+  Remove private notes from that text before opting in. The model extracts
+  verbatim posting requirements. CV facts and screening answers stay local.
+  The queue caps output at 600 tokens and permits 10 AI attempts per account
+  per UTC day without automatic fallback. Billing follows provider pricing.
+- **Ollama.** Run Ollama on Windows and pull a small model. Configure the
+  endpoint in **Settings → Models**, or set
+  `OLLAMA_BASE_URL=http://host.docker.internal:11434` in the local `.env`
+  and recreate the backend. Choose Ollama in the queue and enter the model's
+  exact tag. [Ollama for Windows](https://docs.ollama.com/windows)
+
+### Optional approved autofill
+
+Use **JobNavigator Approved Autofill** in Chrome or Edge. From Extensions,
+enable Developer mode, choose Load unpacked, and select `extension-india/`.
+The local Docker setup disables the upstream autofill API.
+
+Open the approved Greenhouse, Lever, or Ashby posting in the active tab. In
+the popup, enter the Job ID shown in the queue, the dashboard port, and the
+current dashboard key. The extension uses the key for the loopback request
+and does not store it. Click **Fill approved fields**. The server rechecks
+approval and posting identity. The browser checks that the tab still matches.
+
+The extension fills empty, visible, uniquely labelled text controls in the
+active document. Dropdowns, file uploads, embedded forms, and unsupported
+sites are manual. It sets values without dispatching input events, so some
+sites may require you to re-enter values. It presses no employer controls.
+Use it only on employer pages that permit autofill.

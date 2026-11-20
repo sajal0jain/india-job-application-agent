@@ -1,0 +1,264 @@
+import React, { useEffect, useState } from 'react'
+import { Link as RouterLink, useParams } from 'react-router-dom'
+import api from '../api'
+import { Button, Card, Heading, Input, Link, PageTitle, Textarea } from '../ui'
+
+const PATH = '/india-workflow'
+const CONTACT = ['Name', 'Email', 'Phone', 'Location']
+const SECTIONS = [...CONTACT, 'Summary', 'Experience', 'Skills', 'Education', 'Certifications', 'Screening']
+const EMPTY = { section: 'Experience', text: '', source: '' }
+const errorText = (error) => typeof error.response?.data?.detail === 'string'
+  ? error.response.data.detail : 'The request failed. Check the fields and try again.'
+
+export default function ApplicationQueue() {
+  const { jobId } = useParams()
+  const [facts, setFacts] = useState([])
+  const [queue, setQueue] = useState([])
+  const [jobs, setJobs] = useState([])
+  const [busy, setBusy] = useState('')
+  const [message, setMessage] = useState('')
+  const [confirmFacts, setConfirmFacts] = useState(false)
+  const [profileDirty, setProfileDirty] = useState(false)
+  const [ready, setReady] = useState(false)
+
+  async function run(label, operation) {
+    setMessage('')
+    setBusy(label)
+    try {
+      await operation()
+    } catch (error) {
+      setMessage(errorText(error))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function refreshQueue() {
+    const { data } = await api.get(`${PATH}/queue`)
+    setQueue(data)
+  }
+
+  useEffect(() => {
+    let active = true
+    Promise.all([
+      api.get(`${PATH}/profile`),
+      api.get(`${PATH}/queue`),
+      api.get('/jobs', { params: { saved: true, brief: true, fields: 'id,title,company', limit: 200 } }),
+    ]).then(([profile, drafts, saved]) => {
+      if (!active) return
+      setFacts(profile.data.facts)
+      setQueue(drafts.data)
+      setJobs(saved.data.jobs)
+      setReady(true)
+    }).catch((error) => { if (active) setMessage(errorText(error)) })
+    return () => { active = false }
+  }, [])
+
+  function updateFacts(next) {
+    setFacts(next)
+    setProfileDirty(true)
+    setConfirmFacts(false)
+  }
+
+  return (
+    <main className="v2-scroll" style={{ overflow: 'auto', padding: 24, flex: 1, display: 'grid', gap: 12, alignContent: 'start' }}>
+      <PageTitle>Application queue</PageTitle>
+      {message && <p role="status">{message}</p>}
+      <Card>
+        <Heading strong>Verified master CV facts</Heading>
+        <details>
+          <summary>{facts.length} facts</summary>
+          <p>Add each claim as it should appear on your resume. For experience, include the employer, role and dates where relevant. Record a source excerpt or reference for every fact. Add contact details separately and use Screening for confirmed answers such as notice period or work authorization.</p>
+          {facts.map((fact, index) => (
+            <div key={index} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingBlock: 4 }}>
+              <select aria-label={`Section for fact ${index + 1}`} value={fact.section} disabled={!!busy}
+                onChange={(event) => updateFacts(facts.map((item, i) => i === index ? { ...item, section: event.target.value } : item))}>
+                {SECTIONS.map((section) => <option key={section}>{section}</option>)}
+              </select>
+              <Input ariaLabel={`Claim ${index + 1}`} value={fact.text} maxLength={360} disabled={!!busy}
+                onChange={(text) => updateFacts(facts.map((item, i) => i === index ? { ...item, text } : item))} />
+              <Input ariaLabel={`Source ${index + 1}`} value={fact.source} maxLength={360} disabled={!!busy}
+                onChange={(source) => updateFacts(facts.map((item, i) => i === index ? { ...item, source } : item))} />
+              <Button disabled={!!busy} onClick={() => updateFacts(facts.filter((_, i) => i !== index))}>Remove fact</Button>
+            </div>
+          ))}
+          <Button disabled={!ready || !!busy || facts.length >= 80} onClick={() => updateFacts([...facts, EMPTY])}>Add fact</Button>
+          <p><label><input type="checkbox" checked={confirmFacts} disabled={!profileDirty || !!busy}
+            onChange={(event) => setConfirmFacts(event.target.checked)} /> I checked every fact against its source.</label></p>
+          <Button disabled={!confirmFacts || !!busy || facts.some(({ text, source }) => !text.trim() || !source.trim())}
+            onClick={() => run('profile', async () => {
+              const { data } = await api.put(`${PATH}/profile`, {
+                verified: true, facts: facts.map(({ section, text, source }) => ({ section, text, source })),
+              })
+              setFacts(data.facts)
+              setConfirmFacts(false)
+              setProfileDirty(false)
+              await refreshQueue()
+              setMessage('Verified facts saved. Review any outdated drafts.')
+            })}>Save verified facts</Button>
+        </details>
+      </Card>
+      {jobId && ready && <JobReview key={jobId} jobId={jobId} facts={facts} busy={busy || (profileDirty ? 'profile edits' : '')}
+        run={run} refreshQueue={refreshQueue} />}
+      <Card>
+        <Heading strong>Drafts</Heading>
+        {queue.length === 0 && <p>Generate a draft from a saved job.</p>}
+        <ul>
+          {queue.map((row) => <li key={row.job_id}><RouterLink to={`/application-queue/${row.job_id}`}>{row.title}</RouterLink> · {row.company} · {row.stale ? 'Update needed' : row.approved ? 'Approved' : 'Needs review'}</li>)}
+        </ul>
+      </Card>
+      <Card>
+        <Heading strong>Saved jobs</Heading>
+        {jobs.length === 0 && <p>Save a posting in Jobs or in India leadership discovery.</p>}
+        <ul>
+          {jobs.map((job) => <li key={job.id}><RouterLink to={`/application-queue/${job.id}`}>{job.title}</RouterLink> · {job.company}</li>)}
+        </ul>
+      </Card>
+    </main>
+  )
+}
+
+function JobReview({ jobId, facts, busy, run, refreshQueue }) {
+  const route = `${PATH}/jobs/${jobId}`
+  const [job, setJob] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const [description, setDescription] = useState('')
+  const [provider, setProvider] = useState('local')
+  const [model, setModel] = useState('')
+  const [consent, setConsent] = useState(false)
+  const [selection, setSelection] = useState([])
+  const [answers, setAnswers] = useState([])
+  const [dirty, setDirty] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const factById = new Map(facts.map((fact) => [fact.id, fact]))
+  const cvFacts = facts.filter((fact) => ![...CONTACT, 'Screening'].includes(fact.section))
+  const screening = facts.filter((fact) => fact.section === 'Screening')
+
+  function loadDraft(value) {
+    setDraft(value)
+    setSelection(value?.resume_fact_ids || [])
+    setAnswers(value?.answers || [])
+    setDirty(false)
+    setConfirmed(false)
+    setSubmitted(false)
+  }
+
+  useEffect(() => {
+    let active = true
+    api.get(route).then(({ data }) => {
+      if (!active) return
+      setJob(data)
+      setDescription(data.draft?.description || data.description)
+      loadDraft(data.draft)
+    }).catch((reason) => { if (active) setError(errorText(reason)) })
+    return () => { active = false }
+  }, [route, facts])
+
+  function changeSelection(next, nextAnswers) {
+    setSelection(next)
+    setAnswers(nextAnswers)
+    setDirty(true)
+    setConfirmed(false)
+    setSubmitted(false)
+  }
+
+  async function write(endpoint, value, method = 'post') {
+    const { data } = await api[method](`${route}/${endpoint}`, value)
+    loadDraft(data)
+    await refreshQueue()
+  }
+
+  async function download() {
+    const { data } = await api.get(`${route}/resume.pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'tailored-resume.pdf'
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  if (error) return <Card><p role="alert">{error}</p></Card>
+  if (!job) return <Card><p>Loading job…</p></Card>
+
+  return (
+    <Card>
+      <Heading strong>{job.title} · {job.company}</Heading>
+      {job.url && <Link href={job.url} target="_blank" rel="noopener noreferrer">Open employer posting</Link>}
+      {job.tracked && <p>This requisition is already in Applications.</p>}
+      {!!job.similar_applications && <p>Review {job.similar_applications} tracked applications with the same employer and title.</p>}
+      <p><label htmlFor="india-posting">Posting text</label></p>
+      <Textarea id="india-posting" value={description} onChange={setDescription} maxLength={16000} rows={5} disabled={!!busy} />
+      <p><label>Matching provider <select value={provider} disabled={!!busy} onChange={(event) => {
+        setProvider(event.target.value); setConsent(false)
+      }}>
+        <option value="local">Local keyword matching (no model)</option>
+        <option value="ollama">Local Ollama</option>
+        <option value="openrouter">Hosted OpenRouter</option>
+      </select></label></p>
+      {provider !== 'local' && <Input ariaLabel="Model name" placeholder="Model name" value={model} onChange={setModel} disabled={!!busy} />}
+      {provider === 'openrouter' && <p><label><input type="checkbox" checked={consent} disabled={!!busy}
+        onChange={(event) => setConsent(event.target.checked)} /> Send this posting text to OpenRouter for one run.</label></p>}
+      <Button disabled={!!busy || !facts.length || !description.trim() || (provider !== 'local' && !model.trim()) || (provider === 'openrouter' && !consent)}
+        onClick={() => run('match', async () => {
+          await write('match', { description, provider, model, hosted_consent: consent })
+          setConsent(false)
+        })}>{busy === 'match' ? 'Matching…' : 'Generate draft'}</Button>
+      {draft?.stale && <p>Verified facts or the posting changed. Generate a fresh draft.</p>}
+      {draft && !draft.stale && (
+        <>
+          <Heading strong>Match score {draft.analysis.score}/100</Heading>
+          <p>Role {draft.analysis.points.role}/20 · Location {draft.analysis.points.location}/20 · Requirements {draft.analysis.points.requirements}/60</p>
+          <p>{draft.analysis.location_reason || 'Location falls outside the target regions'}</p>
+          <ul>{draft.analysis.evidence.map(({ requirement, fact_id: id }) =>
+            <li key={requirement}>{requirement} · {factById.has(id) ? `Evidence: ${factById.get(id).text}` : 'No verified evidence found'}</li>)}</ul>
+          <Heading strong>Resume facts</Heading>
+          <p>Select 6 to 12 facts. The PDF uses the text below.</p>
+          <ul>{cvFacts.map((fact) => (
+            <li key={fact.id}><label><input type="checkbox" checked={selection.includes(fact.id)}
+              disabled={!!busy || (!selection.includes(fact.id) && selection.length >= 12)}
+              onChange={(event) => changeSelection(event.target.checked ? [...selection, fact.id] : selection.filter((id) => id !== fact.id), answers)} />
+              {fact.section} · {fact.text}</label> <small>({fact.source})</small></li>
+          ))}</ul>
+          <Heading strong>Screening answers</Heading>
+          <p>Add the exact form question. Choose a verified answer or leave it blank for browser review.</p>
+          {answers.map((answer, index) => (
+            <div key={index} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingBlock: 4 }}>
+              <Input ariaLabel={`Question ${index + 1}`} value={answer.question} maxLength={360} disabled={!!busy}
+                onChange={(question) => changeSelection(selection, answers.map((item, i) => i === index ? { ...item, question } : item))} />
+              <select aria-label={`Verified answer ${index + 1}`} value={answer.fact_id || ''} disabled={!!busy}
+                onChange={(event) => changeSelection(selection, answers.map((item, i) => i === index ? { ...item, fact_id: event.target.value || null } : item))}>
+                <option value="">Leave blank</option>
+                {screening.map((fact) => <option key={fact.id} value={fact.id}>{fact.text}</option>)}
+              </select>
+              <Button disabled={!!busy} onClick={() => changeSelection(selection, answers.filter((_, i) => i !== index))}>Remove question</Button>
+            </div>
+          ))}
+          <Button disabled={!!busy || answers.length >= 15} onClick={() => changeSelection(selection, [...answers, { question: '', fact_id: null }])}>Add question</Button>{' '}
+          <Button disabled={!!busy || !dirty || answers.some((answer) => !answer.question.trim())}
+            onClick={() => run('draft', () => write('draft', { revision: draft.revision, resume_fact_ids: selection, answers }, 'put'))}>Save draft edits</Button>
+          <p><Button disabled={!!busy || dirty || selection.length < 6} onClick={() => run('pdf', download)}>Download two-page PDF</Button></p>
+          <p><label><input type="checkbox" checked={confirmed} disabled={!!busy || dirty || draft.approved}
+            onChange={(event) => setConfirmed(event.target.checked)} /> I reviewed this job, the resume PDF, and the screening answers.</label></p>
+          <Button disabled={!!busy || dirty || draft.approved || !confirmed || selection.length < 6 || !!job.tracked}
+            onClick={() => run('approve', () => write('approve', { revision: draft.revision, confirmed: true }))}>Approve this version</Button>{' '}
+          {draft.approved && <Button disabled={!!busy} onClick={() => run('revoke', () => write('revoke'))}>Revoke approval</Button>}
+          {draft.approved && !dirty && !job.tracked && (
+            <>
+              {job.target && <p>Open the approved posting, then use the Approved Autofill extension. Job ID <code>{jobId}</code></p>}
+              <p>Attach the reviewed PDF yourself and submit on the employer site.</p>
+              <p><label><input type="checkbox" checked={submitted} disabled={!!busy}
+                onChange={(event) => setSubmitted(event.target.checked)} /> I submitted this application on the employer site.</label></p>
+              <Button disabled={!!busy || !submitted} onClick={() => run('track', async () => {
+                const { data } = await api.post(`${route}/submitted`, { revision: draft.revision, confirmed: true })
+                setJob({ ...job, tracked: data.application_id })
+              })}>Log submitted application</Button>
+            </>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}

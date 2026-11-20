@@ -155,3 +155,55 @@ active document. Dropdowns, file uploads, embedded forms, and unsupported
 sites are manual. It sets values without dispatching input events, so some
 sites may require you to re-enter values. It presses no employer controls.
 Use it only on employer pages that permit autofill.
+
+## Recurring portal and employer discovery
+
+**Searches → India leadership discovery → Automatic search** reports configured
+sources and the most recent sweep. The dashboard owner can run the configured
+sources on demand. The scheduled search runs while Docker and the backend are
+running. It starts on boot when enabled and repeats after the configured interval.
+The coverage report resets when the backend restarts. Jobs are stored locally.
+
+Add only the entries you need to the existing, private `.env`:
+
+```dotenv
+JN_INDIA_SWEEP_HOURS=24
+JN_INDIA_PORTAL_PAGES=2
+JN_INDIA_EMPLOYER_BOARDS=https://jobs.lever.co/thinkahead,https://jobs.lever.co/netomi,https://jobs.lever.co/paytm,https://jobs.ashbyhq.com/g2,https://blackrock.wd1.myworkdayjobs.com/blackrock_professional
+# Add either or both sets once authorized:
+# ADZUNA_APP_ID=
+# ADZUNA_APP_KEY=
+# JOOBLE_API_KEY=
+```
+
+The employer entries are starting points for companies with a Gurugram hiring
+presence. Confirm that each employer permits the intended access before adding
+it. Add further Greenhouse, Lever, Ashby and Workday employer homepages to
+expand coverage. The sweep checks every configured board in order. Workday
+access uses ordinary HTTPS and stops on a block or rate limit. The report
+flags unavailable or partial feeds. This catalog is an allowlist, and coverage
+depends on the employer pages you add, the jobs published to those feeds, and
+the regions the feeds report.
+
+[Adzuna's API](https://developer.adzuna.com/docs/search) supports personal job search under
+its [API terms](https://developer.adzuna.com/docs/terms_of_service).
+For [Jooble](https://in.jooble.org/api/about), obtain a key authorized for the
+India integration and your use. The portal search uses role queries across
+Gurgaon, Gurugram, Delhi NCR and nationwide remote terms. At two pages per
+query, each portal may receive up to 96 requests per sweep. Set a frequency
+and page count that fit your provider quota. A portal error stops that portal
+for the rest of the run. Unconfigured portals receive no requests.
+
+The sweep adds candidates under **Jobs** with source labels. A location marked
+for review needs confirmation on the employer posting. Keep other portals
+and unsupported career sites on manual intake when automated access is
+unavailable. No sweep starts an application or sends candidate data.
+
+After editing `.env`, apply it using the usual Docker command:
+
+```powershell
+docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up --build --wait --wait-timeout 150
+```
+
+Set `JN_INDIA_SWEEP_HOURS=0` and recreate the backend to turn off recurring
+runs. The manual configured-source button remains available.

@@ -117,11 +117,14 @@ async def lifespan(app: FastAPI):
     from backend.runner_management import coordinator, enabled as runner_management_enabled
     if runner_management_enabled():
         coordinator.start()
+    from backend.scraper.india_sweep import india_sweep
+    india_sweep.start()
     run_mcp = mcp_server.endpoint.run if mcp_server else nullcontext
     try:
         async with run_mcp():
             yield
     finally:
+        await india_sweep.stop()
         await coordinator.stop()
 
     if scheduler.running:

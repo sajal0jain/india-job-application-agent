@@ -278,7 +278,7 @@ async def _collect(client, api_url, facets, label, debug, rejected, found: dict,
     return status, total
 
 
-async def scrape(url: str, debug: bool = False) -> list[dict] | tuple:
+async def scrape(url: str, debug: bool = False, *, client_factory=None) -> list[dict] | tuple:
     """Fetch jobs from Workday's internal JSON API."""
     origin, company_slug, site, applied_facets = _parse_workday_url(url)
 
@@ -296,7 +296,7 @@ async def scrape(url: str, debug: bool = False) -> list[dict] | tuple:
     rejected = []
     found: dict = {}
 
-    async with _client() as client:
+    async with (client_factory or _client)() as client:
         status, total = await _collect(client, api_url, applied_facets, label, debug, rejected, found)
     if status != 200 and not found:
         if not debug:

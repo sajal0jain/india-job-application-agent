@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import api from '../api'
 import { Button, Card, Heading, Input, Link, Select } from '../ui'
 
@@ -48,6 +48,7 @@ export default function IndiaDiscovery() {
   return (
     <Card>
       <Heading strong>India leadership discovery</Heading>
+      <ScheduledDiscovery />
       <p>Preview Delhi NCR and Remote India roles on up to three employer boards that permit automated access. Use Greenhouse, Lever, or Ashby board homepages.</p>
       <form onSubmit={search} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {boards.map((url, index) => (
@@ -83,5 +84,66 @@ export default function IndiaDiscovery() {
         </div>
       )}
     </Card>
+  )
+}
+
+function ScheduledDiscovery() {
+  const [status, setStatus] = useState(null)
+  const [error, setError] = useState('')
+  const [starting, setStarting] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    let timer
+    async function poll() {
+      let delay = 30000
+      try {
+        const response = await api.get('/india-discovery/sweep')
+        if (active) setStatus(response.data)
+        if (response.data.running) delay = 5000
+      } catch (error) {
+        if (error.response?.status === 403) return
+      }
+      if (active) timer = setTimeout(poll, delay)
+    }
+    poll()
+    return () => { active = false; clearTimeout(timer) }
+  }, [])
+
+  async function start() {
+    setStarting(true)
+    setError('')
+    try {
+      const { data } = await api.post('/india-discovery/sweep')
+      setStatus(data)
+    } catch (error) {
+      setError(error.response?.data?.detail || 'Could not start discovery.')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  if (!status) return null
+  return (
+    <details open={status.running || undefined}>
+      <summary>Automatic search</summary>
+      <p>{status.enabled_hours ? `Runs every ${status.enabled_hours} hours while Docker is running.` : 'Scheduled runs are off.'}
+        {' '}Configured sources: {status.boards} employer boards{status.portals.map((name) => ` · ${name}`).join('')}.</p>
+      <Button disabled={starting || status.running || (!status.boards && !status.portals.length)} onClick={start}>
+        {starting || status.running ? 'Searching…' : 'Run configured sources'}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {status.last && (
+        <>
+          <p>Last run {new Date(status.last.finished_at).toLocaleString()}</p>
+          {status.last.error && <p>{status.last.error}</p>}
+          <ul>{status.last.sources.map((source, index) => <li key={index}>
+            {source.source} · {source.added || 0} added · {source.review || 0} need location review
+            {!!source.capped_queries && ` · ${source.capped_queries} queries reached the page limit`}
+            {source.error && ` · ${source.error}`}
+          </li>)}</ul>
+        </>
+      )}
+    </details>
   )
 }

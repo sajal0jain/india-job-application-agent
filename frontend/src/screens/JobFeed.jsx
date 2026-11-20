@@ -93,6 +93,9 @@ const RAIL_BTN = {
   display: 'flex', alignItems: 'center', fontSize: 11.5, lineHeight: 'var(--ctl-line)', color: 'var(--rail-ink)', cursor: 'pointer',
 }
 const SOURCE_LABELS = {
+  india_employer: 'India employer board', india_employer_review: 'India employer board · review location',
+  india_adzuna: 'Adzuna', india_adzuna_review: 'Adzuna · review location',
+  india_jooble: 'Jooble', india_jooble_review: 'Jooble · review location',
   direct: 'Direct', extension: 'Extension', jobspy_linkedin: 'LinkedIn', jobspy_indeed: 'Indeed',
   jobspy_zip_recruiter: 'ZipRecruiter', jobspy_google: 'Google', levels_fyi: 'Levels', linkedin_personal: 'LinkedIn Personal',
   linkedin_extension: 'LinkedIn Extension', jobright: 'Jobright', freehire: 'FreeHire', caribbeanjobs: 'CaribbeanJobs', trulyremote: 'TrulyRemoteWork', behance: 'Behance', hollylist: 'Hollylist', wanacreate: 'Wana Create', himalayas: 'Himalayas', eluta: 'Eluta', dribbble: 'Dribbble', artstation: 'ArtStation', workwithindies: 'Work With Indies', playwright_url: 'Company careers', playwright_direct: 'Career page',

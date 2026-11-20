@@ -1,0 +1,26 @@
+services:
+  db:
+    ports: !reset []
+  backend:
+    depends_on: !override
+      db:
+        condition: service_healthy
+    ports: !reset []
+    environment:
+      JN_RUNNER_MANAGEMENT: "0"
+      JN_SCHEDULER_DISABLED: "1"
+      JN_TELEMETRY: "off"
+      ALLOWED_ORIGINS: http://localhost:8088,http://127.0.0.1:8088
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+  runner-manager:
+    profiles: [optional-runner-manager]
+  caddy:
+    environment:
+      NO_PROXY: backend,frontend,localhost,127.0.0.1
+      no_proxy: backend,frontend,localhost,127.0.0.1
+    ports: !override
+      - "127.0.0.1:8088:80"

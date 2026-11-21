@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import '../theme.css'
 import { useToasts, ToastStack } from '../Toast'
-import { useFlashToast, useSettled, useWarm, NBSP, DASH } from '../hooks'
+import { fetchRunOutcome, runFailed, runFailureReason, useFlashToast, useSettled, useWarm, NBSP, DASH } from '../hooks'
 import { EMPTY } from './ResumeSections'
-import { ArchiveBand, Band, Button, Card, Chip, Heading, HeaderRow, Helper, Input, Label, Link, ModalPanel, Mono, NavLink, PageTitle, Pill, SearchInput, ShowMore, Spinner } from '../ui'
+import { ArchiveBand, Band, Button, Card, Chip, Heading, HeaderRow, Helper, Input, Label, Link, ModalPanel, Mono, NavLink, PageTitle, Pill, SearchInput, Select, ShowMore, Spinner, Textarea } from '../ui'
 
 const timeAgo = (s) => {
   if (!s) return ''
@@ -57,6 +57,7 @@ export default function V2Resumes() {
   const [reload, setReload] = useState(0)   // "Try again" re-arms the settle below
   const [q, setQ] = useState('')
   const [addOpen, setAddOpen] = useState(false)
+  const [tailorOpen, setTailorOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [loadErr, setLoadErr] = useState(false)   // a failed load is not an empty account
   const [inflight, setInflight] = useState([])   // [{baseId, jobId}] tailors in progress
@@ -148,9 +149,10 @@ export default function V2Resumes() {
           <PageTitle>Résumés</PageTitle>
           <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--muted)', ...subStyle }}>{sub ? `${sub.b} base${sub.b === 1 ? '' : 's'} · ${sub.c} tailored cop${sub.c === 1 ? 'y' : 'ies'}, listed under their jobs${sub.a ? ` · ${sub.a} archived` : ''}` : loadErr ? DASH : NBSP}</span>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10 }}>
           <SearchInput variant="underline" width="300px" value={q} onChange={(v) => { setQ(v); setShowArchived(false) }}
             placeholder="Search bases, copies, archived…" ariaLabel="Search résumés" />
+          <Button variant="ai" disabled={!ready || loadErr} onClick={() => setTailorOpen(true)}>Tailor from job description</Button>
           <Button onClick={() => setAddOpen(true)}>+ New résumé</Button>
         </div>
       </HeaderRow>
@@ -299,8 +301,104 @@ export default function V2Resumes() {
       </div>
 
       {addOpen && <AddModal onClose={() => setAddOpen(false)} onCreated={(id) => { setAddOpen(false); openResume(id) }} />}
+      {tailorOpen && <TailorFromDescription bases={bases}
+        onClose={() => { setTailorOpen(false); load() }}
+        onNewBase={() => { setTailorOpen(false); setAddOpen(true) }}
+        onCreated={(id) => { setTailorOpen(false); openResume(id) }} />}
       <ToastStack toasts={toasts} onClose={dismissToast} />
     </div>
+  )
+}
+
+const DESCRIPTION_LIMIT = 6000
+
+function TailorFromDescription({ bases, onClose, onNewBase, onCreated }) {
+  const [baseId, setBaseId] = useState(bases.length === 1 ? bases[0].id : '')
+  const [description, setDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [runId, setRunId] = useState('')
+  const [error, setError] = useState('')
+  const [resumeId, setResumeId] = useState('')
+  const [canLeave, setCanLeave] = useState(false)
+
+  useEffect(() => {
+    if (!runId) return
+    let active = true
+    let timer
+    const backgroundTimer = setTimeout(() => setCanLeave(true), 15000)
+    const poll = async () => {
+      const run = await fetchRunOutcome(runId, 'tailor_resume')
+      if (!active) return
+      if (run?.status === 'completed' || runFailed(run)) {
+        const id = run.status === 'completed' && run.meta?.created?.resume_id
+        if (id) setResumeId(id)
+        else setError(run.status === 'completed'
+          ? 'The run finished without a résumé. Check the résumés list before retrying.'
+          : runFailureReason(run))
+        setRunId('')
+        setBusy(false)
+      } else {
+        timer = setTimeout(poll, 2000)
+      }
+    }
+    poll()
+    return () => {
+      active = false
+      clearTimeout(timer)
+      clearTimeout(backgroundTimer)
+    }
+  }, [runId])
+
+  const canCreate = bases.some((base) => base.id === baseId) && Boolean(description.trim()) && !busy
+  const create = async () => {
+    if (!canCreate) return
+    setError('')
+    setCanLeave(false)
+    setBusy(true)
+    try {
+      const { data } = await api.post('/resumes/tailor', {
+        base_resume_id: baseId,
+        job_description: description.trim(),
+        evidence_only: true,
+      })
+      if (!data?.run_id) throw new Error('Missing run ID')
+      setRunId(data.run_id)
+    } catch (e) {
+      setError(typeof e.response?.data?.detail === 'string'
+        ? e.response.data.detail : 'Could not start tailoring. Check the backend and try again.')
+      setBusy(false)
+    }
+  }
+
+  const title = 'Tailor from job description'
+  return (
+    <ModalPanel width="min(560px, calc(100vw - 24px))" title={title}
+      onClose={!busy || canLeave ? onClose : undefined} trapFocus style={{ padding: 22, gap: 12 }}>
+      <Heading size={19} className="v2-dialogtitle">{title}</Heading>
+      {bases.length ? <>
+        <Helper>The AI prioritizes existing bullets and skills from your base résumé. Review the separate copy before exporting.</Helper>
+        <Label>Base résumé</Label>
+        <Select ariaLabel="Base résumé" value={baseId} placeholder="Choose a base résumé"
+          options={bases.map(({ id, name }) => [id, name])}
+          onPick={setBaseId} disabled={busy || Boolean(resumeId)} />
+        <Label>Job description</Label>
+        <Textarea ariaLabel="Job description" value={description} onChange={setDescription}
+          rows={7} maxLength={DESCRIPTION_LIMIT} readOnly={busy || Boolean(resumeId)}
+          placeholder="Paste the job description, including the responsibilities and requirements." />
+        <Helper>{description.length.toLocaleString()} / {DESCRIPTION_LIMIT.toLocaleString()} characters</Helper>
+        {error && <div role="alert" style={{ color: 'var(--bad)' }}>{error}</div>}
+        {busy && <div role="status"><Helper>Creating your tailored copy…</Helper></div>}
+        {resumeId && <div role="status"><Helper>Your tailored copy is ready to review.</Helper></div>}
+      </> : <Helper>Create or import a base résumé with your verified experience and skills first.</Helper>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9 }}>
+        {resumeId ? <Button onClick={() => onCreated(resumeId)}>Open tailored résumé</Button>
+          : bases.length ? <Button variant="ai" onClick={create} disabled={!canCreate}>Create tailored résumé</Button>
+            : <Button onClick={onNewBase}>New base résumé</Button>}
+        <Button variant="secondary" onClick={onClose} disabled={busy && !canLeave}>
+          {busy ? 'Continue in background' : 'Close'}
+        </Button>
+      </div>
+    </ModalPanel>
   )
 }
 

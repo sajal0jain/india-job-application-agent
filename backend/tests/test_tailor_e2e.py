@@ -61,3 +61,62 @@ async def test_tailor_end_to_end(api_client, test_db, monkeypatch):
     resumes = test_db.query(Resume).filter(Resume.parent_id == base.id).all()
     assert len(resumes) == 1
     assert resumes[0].job_id == job.id
+
+
+@pytest.mark.asyncio
+async def test_pasted_description_creates_copy_with_only_existing_evidence(api_client, test_db, monkeypatch):
+    import json
+
+    test_db.add(Setting(key="dashboard_api_key", value=""))
+    base_data = {
+        "summary": "Analytics leader",
+        "experience": [{
+            "company": "Acme",
+            "title": "Director",
+            "bullets": ["Ran reporting", "Led model validation", "Managed a team"],
+            "suggested_bullets": ["Unverified suggestion"],
+        }],
+        "skills": {"Reporting": "Dashboards", "AI": "Model validation"},
+    }
+    base = Resume(name="Executive", is_base=True, template="inter", json_data=base_data)
+    test_db.add(base)
+    test_db.commit()
+
+    async def fake_call(prompt, system, max_tokens):
+        assert "Lead AI model validation" in prompt
+        return {"text": json.dumps({
+            "summary": "Fabricated award",
+            "experience": [[True, 1, 1, 99, "Fabricated metric"]],
+            "skills": ["AI", "Fabricated skill"],
+        }), "usage": {}}
+
+    monkeypatch.setattr("backend.analyzer.llm_client.call_cv_tailor_llm", fake_call)
+    monkeypatch.setattr("backend.job_monitor._running", {})
+    resp = api_client.post("/api/resumes/tailor", json={
+        "base_resume_id": str(base.id),
+        "job_description": "Lead AI model validation",
+        "evidence_only": True,
+    })
+    assert resp.status_code == 202
+    run_id = resp.json()["run_id"]
+
+    for _ in range(50):
+        await asyncio.sleep(0.02)
+        run = api_client.get(f"/api/monitor/run/{run_id}").json()
+        if run.get("status") != "running":
+            break
+
+    assert run["status"] == "completed", run
+    copy_id = run["meta"]["created"]["resume_id"]
+    test_db.expire_all()
+    copy = test_db.get(Resume, uuid.UUID(copy_id))
+    assert copy.parent_id == base.id and copy.job_id is None and not copy.is_base
+    assert copy.template == base.template
+    assert copy.json_data["summary"] == "Analytics leader"
+    assert copy.json_data["experience"] == [{
+        "company": "Acme",
+        "title": "Director",
+        "bullets": ["Led model validation", "Ran reporting", "Managed a team"],
+    }]
+    assert list(copy.json_data["skills"].items()) == [("AI", "Model validation"), ("Reporting", "Dashboards")]
+    assert base.json_data == base_data

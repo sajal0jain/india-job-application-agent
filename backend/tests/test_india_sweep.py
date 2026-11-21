@@ -70,7 +70,7 @@ async def test_sweep_does_not_overlap(monkeypatch):
     scheduler = discovery.IndiaSweep()
     pending = asyncio.Event()
 
-    async def execute():
+    async def execute(**options):
         await pending.wait()
 
     monkeypatch.setattr(scheduler, "execute", execute)
@@ -158,3 +158,19 @@ def test_dashboard_watchlist_replaces_environment_and_rejects_invalid_boards(tes
     assert discovery.employer_boards() == [board]
     api.save_watchlist(api.WatchlistRequest(boards=[]), test_db)
     assert discovery.employer_boards() == []
+
+
+@pytest.mark.asyncio
+async def test_manual_remote_search_can_run_with_no_configured_source(monkeypatch):
+    monkeypatch.setattr(discovery, "employer_boards", lambda: [])
+    monkeypatch.setattr(discovery, "portal_credentials", lambda: {})
+    monkeypatch.setattr(discovery, "remotive_enabled", lambda: False)
+    monkeypatch.setattr(discovery.remotive, "reserve_request", lambda: True)
+    monkeypatch.setattr(discovery.remotive, "postings", AsyncMock(return_value=[]))
+    monkeypatch.setattr(discovery, "import_candidates", lambda *args: {"added": 0})
+    scheduler = discovery.IndiaSweep()
+    assert not scheduler.trigger()
+    assert await discovery.sweep() == []
+    assert await discovery.sweep(include_remote=True) == [{"source": "Remotive", "received": 0, "added": 0}]
+    assert scheduler.trigger(include_remote=True)
+    await scheduler.stop()

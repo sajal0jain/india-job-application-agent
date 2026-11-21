@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
-import IndiaDiscovery from './IndiaDiscovery'
+import IndiaDiscovery, { JobSearch } from './IndiaDiscovery'
 import AlertIntake from './AlertIntake'
 import { track } from '../telemetry'
 import { useToasts, ToastStack } from '../Toast'
@@ -612,7 +612,7 @@ export default function Searches() {
   // countdown recomputes from the cached timestamp), then reconcile on settle.
   // `!loadErr`: a settled-but-failed load carries zeroes, and neither the cache
   // nor the subtitle may claim them (R4-T2A-08 / R4-T2B-03).
-  const { warm: sub, style: subStyle } = useWarm('searches', ready
+  const { warm: sub } = useWarm('searches', ready
     ? { n: searches.length, active: nActive, warn: nWarn, next: nextRun }
     : null, ready, !loadErr)
   const countLine = useMemo(() => {
@@ -791,14 +791,7 @@ export default function Searches() {
       <HeaderRow as="header" variant="screen" line="none" align="flex-end" style={{ gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           <PageTitle>Searches</PageTitle>
-          <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...subStyle }}>{countLine}</span>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <CopyFrom kind="searches" pushToast={pushToast} onCloned={async (row) => {
-            await load(); loadAux(); bumpCounts(); notePaused(row, 'was copied')   // R30 I-04
-            setNewOpen(false); setMenuFor(null); setEditing(row.id); setDraft(draftOf(row))
-          }} />
-          <Button onClick={() => { setNewOpen((v) => !v); setEditing(null); setMenuFor(null) }}>+ New search</Button>
+
         </div>
       </HeaderRow>
       {/* the design draws the rule inset by 30px on both sides, not full-bleed */}
@@ -806,8 +799,25 @@ export default function Searches() {
 
       {/* body */}
       <div className="v2-scroll" style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '14px 30px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <IndiaDiscovery />
-        <AlertIntake />
+        <JobSearch />
+        <details>
+          <summary>Import a job alert</summary>
+          <AlertIntake />
+        </details>
+        <details>
+          <summary>Advanced search tools</summary>
+          <IndiaDiscovery />
+          <HeaderRow>
+            <Heading strong>Saved searches</Heading>
+            <Helper>{countLine}</Helper>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <CopyFrom kind="searches" pushToast={pushToast} onCloned={async (row) => {
+                await load(); loadAux(); bumpCounts(); notePaused(row, 'was copied')   // R30 I-04
+                setNewOpen(false); setMenuFor(null); setEditing(row.id); setDraft(draftOf(row))
+              }} />
+              <Button onClick={() => { setNewOpen((v) => !v); setEditing(null); setMenuFor(null) }}>+ New search</Button>
+            </div>
+          </HeaderRow>
         {/* new search card */}
         {newOpen && (
           <Card style={{ padding: 0, borderColor: 'var(--accent)', display: 'flex', flexDirection: 'column' }}>
@@ -957,6 +967,7 @@ export default function Searches() {
             <Link onClick={() => setNewOpen(true)} style={{ paddingTop: 2 }}>+ New search</Link>
           </div>
         )}
+        </details>
       </div>
 
       {test && <TestModal test={test} tab={testTab} setTab={setTestTab} onClose={() => { setTest(null); writeTestRec(null) }} />}

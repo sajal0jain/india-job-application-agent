@@ -169,7 +169,7 @@ def import_candidates(postings, source):
     return counts
 
 
-async def sweep():
+async def sweep(*, include_remote=False):
     report = []
     # Direct postings are ingested first so the canonical employer link wins where it is available.
     for index, url in enumerate(employer_boards(), start=1):
@@ -193,7 +193,7 @@ async def sweep():
 
     pages = portal_pages()
     async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-        if remotive_enabled():
+        if include_remote or remotive_enabled():
             entry = {"source": "Remotive"}
             report.append(entry)
             try:
@@ -246,10 +246,10 @@ class IndiaSweep:
         if hours:
             self.scheduler = asyncio.create_task(self.repeat(hours))
 
-    def trigger(self):
-        if not self.configured() or (self.run and not self.run.done()):
+    def trigger(self, *, include_remote=False):
+        if (self.run and not self.run.done()) or (not include_remote and not self.configured()):
             return False
-        self.run = run_in_clean_context(asyncio.create_task, self.execute())
+        self.run = run_in_clean_context(asyncio.create_task, self.execute(include_remote=include_remote))
         return True
 
     async def repeat(self, hours):
@@ -260,10 +260,10 @@ class IndiaSweep:
             else:
                 await asyncio.sleep(60)
 
-    async def execute(self):
+    async def execute(self, *, include_remote=False):
         try:
             with owner_context():
-                sources = await sweep()
+                sources = await sweep(include_remote=include_remote)
             self.last = {"finished_at": datetime.now(timezone.utc).isoformat(), "sources": sources}
         except Exception as error:
             logger.warning("India sweep failed (%s)", type(error).__name__)

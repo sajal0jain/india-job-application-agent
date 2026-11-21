@@ -48,8 +48,7 @@ export default function IndiaDiscovery() {
 
   return (
     <Card>
-      <Heading strong>India leadership discovery</Heading>
-      <ScheduledDiscovery />
+      <Heading strong>Preview employer boards</Heading>
       <p>Preview Gurugram, Delhi NCR, Remote India, and worldwide remote roles on up to three employer boards that permit automated access. Use Greenhouse, Lever, or Ashby board homepages.</p>
       <form onSubmit={search} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {boards.map((url, index) => (
@@ -88,65 +87,118 @@ export default function IndiaDiscovery() {
   )
 }
 
-function ScheduledDiscovery() {
+const DISCOVERY_SOURCES = ['employer', 'adzuna', 'jooble', 'remotive', 'alert']
+  .flatMap((source) => [`india_${source}`, `india_${source}_review`]).join(',')
+
+export function JobSearch() {
   const [status, setStatus] = useState(null)
   const [error, setError] = useState('')
+  const [statusError, setStatusError] = useState('')
   const [starting, setStarting] = useState(false)
+  const [jobs, setJobs] = useState(null)
+  const [jobsError, setJobsError] = useState(false)
+  const [filter, setFilter] = useState('')
+  const running = Boolean(status?.running || starting)
+  const finishedAt = status?.last?.finished_at
 
   useEffect(() => {
     let active = true
     let timer
     async function poll() {
-      let delay = 30000
       try {
-        const response = await api.get('/india-discovery/sweep')
-        if (active) setStatus(response.data)
-        if (response.data.running) delay = 5000
+        const { data } = await api.get('/india-discovery/sweep')
+        if (active) { setStatus(data); setStatusError('') }
       } catch (error) {
+        if (active) setStatusError(error.response?.status === 403
+          ? 'Automatic search is available to the dashboard owner.'
+          : 'Could not load search status.')
         if (error.response?.status === 403) return
       }
-      if (active) timer = setTimeout(poll, delay)
+      if (active) timer = setTimeout(poll, running ? 2000 : 10000)
     }
     poll()
     return () => { active = false; clearTimeout(timer) }
-  }, [])
+  }, [running])
+
+  useEffect(() => {
+    let active = true
+    api.get('/jobs', { params: { source: DISCOVERY_SOURCES, status: 'new,saved', limit: 30, brief: true,
+      fields: 'id,title,company,location,source' } })
+      .then(({ data }) => { if (active) { setJobs(data.jobs); setJobsError(false) } })
+      .catch(() => { if (active) setJobsError(true) })
+    return () => { active = false }
+  }, [finishedAt])
 
   async function start() {
     setStarting(true)
     setError('')
     try {
-      const { data } = await api.post('/india-discovery/sweep')
+      const { data } = await api.post('/india-discovery/sweep?include_remote=true')
       setStatus(data)
     } catch (error) {
-      setError(error.response?.data?.detail || 'Could not start discovery.')
+      setError(error.response?.data?.detail || 'Could not start search.')
     } finally {
       setStarting(false)
     }
   }
 
-  if (!status) return null
+  const terms = filter.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const visible = (jobs || []).filter((job) => {
+    const text = `${job.title || ''} ${job.company || ''} ${job.location || ''}`.toLowerCase()
+    return terms.every((term) => text.includes(term))
+  })
+  const imported = status?.last?.sources.reduce((count, source) => count + (source.added || 0), 0) || 0
+  const failures = status?.last?.sources.filter((source) => source.error).length || 0
+  const remoteOnly = status && !status.boards && !status.portals.some((name) => name !== 'Remotive')
+
   return (
-    <details open={status.running || undefined}>
-      <summary>Automatic search</summary>
-      <p>{status.enabled_hours ? `Runs every ${status.enabled_hours} hours while Docker is running.` : 'Scheduled runs are off.'}
-        {' '}Configured sources: {status.boards} employer boards{status.portals.map((name) => ` · ${name}`).join('')}.</p>
-      <Button disabled={starting || status.running || (!status.boards && !status.portals.length)} onClick={start}>
-        {starting || status.running ? 'Searching…' : 'Run configured sources'}
-      </Button>
-      <EmployerWatchlist onSave={(boards) => setStatus((previous) => ({ ...previous, boards }))} />
-      {error && <p role="alert">{error}</p>}
-      {status.last && (
-        <>
-          <p>Last run {new Date(status.last.finished_at).toLocaleString()}</p>
-          {status.last.error && <p>{status.last.error}</p>}
-          <ul>{status.last.sources.map((source, index) => <li key={index}>
-            {source.source} · {source.added || 0} added · {source.review || 0} need location review
-            {!!source.capped_queries && ` · ${source.capped_queries} queries reached the page limit`}
-            {source.error && ` · ${source.error}`}
-            {source.note && ` · ${source.note}`}
-          </li>)}</ul>
-        </>
+    <Card>
+      <Heading strong>Find leadership jobs</Heading>
+      <p>Manager, Director and Head roles in AI, analytics and data science across Gurugram, Delhi NCR and remote locations open to India.</p>
+      <Button disabled={!status || running} onClick={start}>{running ? 'Searching…' : 'Find jobs'}</Button>
+      {remoteOnly && <p>Remotive is ready to search. Add employer boards under Search sources to cover more local roles.</p>}
+      {(error || statusError) && <p role="alert">{error || statusError}</p>}
+      {status && <details>
+        <summary>Search sources</summary>
+        <p>Remotive runs on demand. {status.boards} employer boards configured
+          {status.portals.length ? ` · ${status.portals.join(', ')}` : ''}.
+          {' '}{status.enabled_hours ? `Automatic sweeps run every ${status.enabled_hours} hours while Docker is running.` : 'Scheduled sweeps are off.'}</p>
+        <EmployerWatchlist onSave={(boards) => setStatus((previous) => ({ ...previous, boards }))} />
+      </details>}
+      <div aria-live="polite">
+        {running && <p>Checking available sources. Results will appear here when the search finishes.</p>}
+        {!running && status?.last && (
+          <>
+            <p>{status.last.error || `${imported} new job${imported === 1 ? '' : 's'} added${failures ? ` · ${failures} sources returned errors` : ''}.`}</p>
+            <details>
+              <summary>Last search details</summary>
+              <p>{new Date(finishedAt).toLocaleString()}</p>
+              <ul>{status.last.sources.map((source, index) => <li key={index}>
+                {source.source} · {source.added || 0} added · {source.duplicate || 0} already seen
+                {!!source.capped_queries && ` · ${source.capped_queries} queries reached the page limit`}
+                {source.error && ` · ${source.error}`}{source.note && ` · ${source.note}`}
+              </li>)}</ul>
+            </details>
+          </>
+        )}
+      </div>
+      {jobsError && <p>Could not load recent discoveries. <Link href="/feed">Open Jobs feed</Link></p>}
+      {!running && status?.last && jobs?.length === 0 && <p>No open jobs from the discovery sources yet.</p>}
+      {!!jobs?.length && (
+        <div style={{ marginTop: 14 }}>
+          <Heading strong>Recent discoveries</Heading>
+          <p><Link href="/feed">Open Jobs feed</Link></p>
+          <Input ariaLabel="Filter recent discoveries" value={filter} onChange={setFilter} placeholder="Filter by role, company or location" />
+          {visible.length === 0 && <p>No recent jobs match this filter.</p>}
+          <ul>{visible.map((job) => (
+            <li key={job.id} style={{ marginBlock: 8 }}>
+              <Link href={`/application-queue/${job.id}`}>{job.title}</Link>
+              {' · '}{job.company || 'Employer unspecified'}{job.location && ` · ${job.location}`}
+              {job.source?.endsWith('_review') && ' · Confirm location eligibility'}
+            </li>
+          ))}</ul>
+        </div>
       )}
-    </details>
+    </Card>
   )
 }

@@ -37,9 +37,9 @@ def sweep_status():
 
 
 @router.post("/sweep", status_code=202)
-async def start_sweep():
+async def start_sweep(include_remote: bool = False):
     require_owner()
-    if not india_sweep.trigger():
+    if not india_sweep.trigger(include_remote=include_remote):
         raise HTTPException(409, "A sweep is running or no sources are configured.")
     return india_sweep.status()
 

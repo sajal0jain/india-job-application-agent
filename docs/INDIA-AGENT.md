@@ -68,7 +68,7 @@ On a disposable test database, run `python tests/tools/india_agent_smoke.py` fro
 
 ## Phase 2 discovery
 
-Open **Searches → India leadership discovery** and enter up to three employer
+Open **Searches → Advanced search tools → Preview employer boards** and enter up to three employer
 board homepages from Greenhouse, Lever, or Ashby. Use a board only after
 confirming the employer permits automated access. These are example URL shapes:
 
@@ -160,7 +160,7 @@ Use it only on employer pages that permit autofill.
 
 ## Recurring portal and employer discovery
 
-**Searches → India leadership discovery → Automatic search** reports configured
+**Searches → Find jobs** and **Search sources** report configured
 sources and the most recent sweep. The dashboard owner can run the configured
 sources on demand. The scheduled search runs while Docker and the backend are
 running. It starts on boot when enabled and repeats after the configured interval.
@@ -243,7 +243,7 @@ approve applications or generate PDFs automatically.
 
 ## Employer watchlist, hiring details, and email review
 
-- **Searches → India leadership discovery → Automatic search → Edit employer
+- **Searches → Search sources → Edit employer
   watchlist.** The owner can paste approved employer board URLs, one per
   line. The first edit starts from the configured `.env` list. Saving writes
   the replacement list to the local database. Future sweeps use that saved
@@ -277,3 +277,17 @@ Google AI Studio in the job's provider picker and consent for that run. The
 queue sends only the posting text and scores CV evidence locally. Use the
 local matching option to run without a provider. Check Google AI Studio for
 actual API usage and charges.
+
+## Quick search
+
+Open **Searches → Find jobs**. The on-demand search includes Remotive and
+any employer boards and portal accounts you configured. It can run with
+Remotive alone without a key. Remotive's six-hour refresh limit still
+applies. The page shows how many jobs were added and lists recent results
+with links to the application queue.
+
+Open **Search sources** to edit the employer watchlist. **Last search
+details** shows each source's result, failures, and page limits. The
+separate **Advanced search tools** section holds employer previews and
+saved search configurations. **Import a job alert** accepts a job-alert
+email or pasted links.

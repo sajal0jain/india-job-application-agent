@@ -297,11 +297,40 @@ _EMPTY_RESUME = {"header": {"name": "", "contact_items": []}, "summary": "", "ex
                  "skills": {}, "education": [], "projects": [], "publications": []}
 
 
-def _display_experience(experience, group_employers):
+def _read_employer_logo(value):
+    """Accept a small, verified PNG or JPEG data URI from the résumé editor."""
+    import base64
+    import binascii
+    from PIL import Image, UnidentifiedImageError
+
+    if not isinstance(value, str) or len(value) > 44000:
+        return None
+    prefix, _, encoded = value.partition(",")
+    formats = {"data:image/png;base64": "PNG", "data:image/jpeg;base64": "JPEG"}
+    if prefix not in formats:
+        return None
+    try:
+        data = base64.b64decode(encoded, validate=True)
+        if len(data) > 32768:
+            return None
+        with Image.open(io.BytesIO(data), formats=[formats[prefix]]) as image:
+            if max(image.size) > 600:
+                return None
+            image.verify()
+        return data
+    except (binascii.Error, OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError):
+        return None
+
+
+def _display_experience(experience, group_employers, show_logos=True):
     """Annotate consecutive employer roles for export without changing stored facts."""
-    if not group_employers or not isinstance(experience, list):
+    if not isinstance(experience, list):
         return experience
     from itertools import groupby
+
+    def logo(role):
+        value = role.get("_company_logo") if show_logos else None
+        return value if _read_employer_logo(value) else ""
 
     def employer(entry):
         if not isinstance(entry, dict):
@@ -309,16 +338,20 @@ def _display_experience(experience, group_employers):
         return " ".join(_as_text(entry.get("company")).split()).casefold()
 
     rows = []
-    for company, entries in groupby(experience, key=employer):
+    groups = groupby(experience, key=employer) if group_employers else (("", [role]) for role in experience)
+    for company, entries in groups:
         roles = list(entries)
-        if not company or len(roles) == 1:
-            rows.extend(roles)
-            continue
+        grouped = bool(company and len(roles) > 1)
+        group_logo = next(filter(None, map(logo, roles)), "") if grouped else ""
         for index, role in enumerate(roles):
+            if not isinstance(role, dict):
+                rows.append(role)
+                continue
             rows.append({
                 **role,
-                "grouped_role": True,
-                "employer_heading": roles[0]["company"] if index == 0 else "",
+                "grouped_role": grouped,
+                "employer_heading": roles[0]["company"] if grouped and index == 0 else "",
+                "employer_logo": (group_logo if index == 0 else "") if grouped else logo(role),
             })
     return rows
 
@@ -355,7 +388,8 @@ def _render_html(json_data: dict, template_name: str, page_format: str) -> str:
     content["header"] = {**_EMPTY_RESUME["header"], **content["header"]}
     content = _render_safe_links(content)
     content["experience"] = _display_experience(
-        content["experience"], content.get("group_experience") is True
+        content["experience"], content.get("group_experience") is True,
+        content.get("show_employer_logos") is not False
     )
     html = template.render(
         **content,
@@ -1135,7 +1169,11 @@ async def _tailor_impl(base_resume_id: str, job_id: str | None, job_description_
 
         resume_sections = {
             "summary": base_data.get("summary", ""),
-            "experience": list(base_data.get("experience", []) or []),
+            "experience": [
+                {key: value for key, value in entry.items() if key != "_company_logo"}
+                if isinstance(entry, dict) else entry
+                for entry in (base_data.get("experience") or [])
+            ],
             "skills": dict(base_data.get("skills", {}) or {}),
         }
 
@@ -1602,6 +1640,7 @@ def _build_docx(json_data: dict, fmt: str, footer_text: str = "") -> bytes:
     publications."""
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
+    from docx.image.image import Image as DocxImage
     from docx.opc.constants import RELATIONSHIP_TYPE as RT
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
@@ -1698,13 +1737,25 @@ def _build_docx(json_data: dict, fmt: str, footer_text: str = "") -> bytes:
         runs(doc.add_paragraph(), data["summary"])
     if items("experience"):
         doc.add_heading("Experience", level=2)
-        for job in _display_experience(items("experience"), data.get("group_experience") is True):
+        for job in _display_experience(
+            items("experience"), data.get("group_experience") is True,
+            data.get("show_employer_logos") is not False,
+        ):
+            heading = None
             if job.get("employer_heading"):
                 heading = row(str(job["employer_heading"]))
                 heading.paragraph_format.keep_with_next = True
             company = job.get("company") if not job.get("grouped_role") else None
-            row(f"{job.get('title') or ''}{' at ' + str(company) if company else ''}",
-                job.get("date") or job.get("dates") or "")
+            role_heading = row(f"{job.get('title') or ''}{' at ' + str(company) if company else ''}",
+                               job.get("date") or job.get("dates") or "")
+            image = _read_employer_logo(job["employer_logo"])
+            if image:
+                dimensions = DocxImage.from_blob(image)
+                scale = min(28 / dimensions.px_width, 12 / dimensions.px_height)
+                (heading if heading is not None else role_heading).add_run("  ").add_picture(
+                    io.BytesIO(image), width=Pt(dimensions.px_width * scale),
+                    height=Pt(dimensions.px_height * scale),
+                )
             if job.get("location"):
                 doc.add_paragraph(str(job["location"]))
             details(job)

@@ -46,3 +46,23 @@ def test_grouped_docx_employer_headings_and_roles():
     assert "Senior Manager\tFeb 2022 – May 2026" in paragraphs
     assert "Manager\tJul 2019 – Jan 2022" in paragraphs
     assert "Built sample data products" in paragraphs
+
+
+def test_employer_logo_exports_once_and_can_be_hidden():
+    import base64
+    from PIL import Image
+
+    data = BytesIO()
+    Image.new("RGB", (40, 12), "blue").save(data, format="PNG")
+    logo = "data:image/png;base64," + base64.b64encode(data.getvalue()).decode()
+    experience = deepcopy(EXPERIENCE)
+    experience[1]["_company_logo"] = logo
+    experience[3]["_company_logo"] = "https://example.invalid/logo.png"
+    resume = {"experience": experience, "group_experience": True}
+    html = BeautifulSoup(_render_html(resume, "inter", "a4"), "html.parser")
+    assert [image["src"] for image in html.find_all("img")] == [logo]
+    assert len(Document(BytesIO(_build_docx(resume, "a4"))).inline_shapes) == 1
+
+    resume["show_employer_logos"] = False
+    assert not BeautifulSoup(_render_html(resume, "inter", "a4"), "html.parser").find_all("img")
+    assert len(Document(BytesIO(_build_docx(resume, "a4"))).inline_shapes) == 0

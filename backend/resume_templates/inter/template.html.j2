@@ -182,8 +182,12 @@ ul.bullets li {
     <div class="section-title">Experience</div>
     {% for job in experience %}
     <div class="entry">
+      {% set logo = job.employer_logo %}
+      {% if logo and not job.grouped_role %}
+      <img src="{{ logo | e }}" alt="" style="width: 28px; height: 16px; object-fit: contain; object-position: left">
+      {% endif %}
       {% if job.grouped_role %}
-      {% if job.employer_heading %}<div><strong>{{ job.employer_heading | e }}</strong></div>{% endif %}
+      {% if job.employer_heading %}<div>{% if logo %}<img src="{{ logo | e }}" alt="" style="width: 28px; height: 16px; object-fit: contain; vertical-align: middle; margin-right: 5px">{% endif %}<strong>{{ job.employer_heading | e }}</strong></div>{% endif %}
       <div class="entry-row">
         <span><strong>{{ job.title | e }}</strong></span>
         <span class="entry-date">{{ (job.date or job.dates) | e }}</span>

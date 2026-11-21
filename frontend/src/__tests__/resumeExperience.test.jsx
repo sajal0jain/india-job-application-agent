@@ -49,3 +49,13 @@ it('saves the employer grouping preference separately from the experience entrie
   fireEvent.click(screen.getByRole('switch', { name: 'Group consecutive roles at the same employer' }))
   expect(saved).toHaveBeenCalledWith({ ...data, group_experience: true })
 })
+
+
+it('can hide uploaded employer logos without deleting them', () => {
+  const saved = vi.fn()
+  const data = { experience: [{ title: 'Director', company: 'Example', _company_logo: 'data:image/png;base64,AA==' }] }
+  render(<ExperienceEditor groupOption data={data} {...makeMutators(data, saved)} />)
+  expect(screen.getByLabelText('Employer logo').getAttribute('accept')).toBe('image/png,image/jpeg')
+  fireEvent.click(screen.getByRole('switch', { name: 'Show employer logos' }))
+  expect(saved).toHaveBeenCalledWith({ ...data, show_employer_logos: false })
+})

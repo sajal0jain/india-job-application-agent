@@ -271,6 +271,51 @@ export function baseExperienceFor(base, role, index) {
   return undefined
 }
 
+function EmployerLogo({ value, onChange }) {
+  const [error, setError] = useState('')
+  const live = useRef(onChange)
+  live.current = onChange
+
+  async function upload(file) {
+    setError('')
+    if (!file) return
+    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 32768) {
+      setError('Choose a PNG or JPEG image up to 32 KB.')
+      return
+    }
+    try {
+      const image = await createImageBitmap(file)
+      const fits = Math.max(image.width, image.height) <= 600
+      image.close()
+      if (!fits) {
+        setError('Use an image no larger than 600 × 600 pixels.')
+        return
+      }
+      const reader = new FileReader()
+      reader.addEventListener('load', () => live.current(reader.result))
+      reader.addEventListener('error', () => setError('Could not read the image.'))
+      reader.readAsDataURL(file)
+    } catch {
+      setError('Could not read the image.')
+    }
+  }
+
+  return (
+    <div>
+      <label>
+        Employer logo <input type="file" accept="image/png,image/jpeg"
+          onChange={(event) => {
+            const file = event.target.files[0]
+            event.target.value = ''
+            upload(file)
+          }} />
+      </label>
+      {value && <Button size="xs" onClick={() => onChange('')}>Remove logo</Button>}
+      {error && <p role="status">{error}</p>}
+    </div>
+  )
+}
+
 export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, groupOption, onRemoved }) {
   const exp = data.experience || []
   const undoRemove = useUndoRemove(mutate, onRemoved)
@@ -304,6 +349,9 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, g
         onChange={(enabled) => setField('group_experience', enabled)}
         label="Group consecutive roles at the same employer"
         title="Show one employer heading in the preview and exports. Each role keeps its title, dates, and bullets." />}
+      {groupOption && exp.some((role) => role._company_logo) && <Switch
+        on={data.show_employer_logos !== false} label="Show employer logos"
+        onChange={(enabled) => setField('show_employer_logos', enabled)} />}
       {exp.length > 1 && <Button size="sm" onClick={() => reorder(newestExperienceOrder(exp))}>Sort newest first</Button>}
       {exp.map((e, i) => {
         const ch = entryChanged(e, i), isOpen = open.has(i), nb = (e.bullets || []).length
@@ -338,6 +386,8 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, g
                   <Field label="Date" value={e.date} onChange={(v) => setField(`experience.${i}.date`, v)} placeholder="Jan 2022 – Present" />
                 </div>
                 <Field label="Description" value={e.description} onChange={(v) => setField(`experience.${i}.description`, v)} placeholder="Optional role description" />
+                {groupOption && <EmployerLogo value={e._company_logo}
+                  onChange={(value) => setField(`experience.${i}._company_logo`, value)} />}
                 {(e.bullets || []).map((b, bi) => {
                   const m = bulletMark(i, bi, b)
                   return (

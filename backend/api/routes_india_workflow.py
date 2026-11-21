@@ -48,7 +48,7 @@ class ProfileInput(Input):
 
 
 class MatchInput(Input):
-    provider: Literal["local", "ollama", "openrouter"] = "local"
+    provider: Literal["local", "ollama", "openrouter", "gemini"] = "local"
     model: str = Field(default="", max_length=160)
     hosted_consent: bool = False
     description: str = Field(default="", max_length=16000)
@@ -211,6 +211,12 @@ async def extract_requirements(payload, text, db):
     try:
         if payload.provider == "ollama":
             response = await asyncio.wait_for(llm_client._call_ollama(prompt, system, payload.model, 600), 125)
+        elif payload.provider == "gemini":
+            key = llm_client.provider_api_key(db, "gemini")
+            db.rollback()
+            response = await asyncio.wait_for(llm_client.call_gemini(
+                prompt, system, payload.model, key, 600, max_retries=0,
+            ), 45)
         else:
             key = llm_client.provider_api_key(db, "openrouter")
             if not key:
@@ -243,8 +249,9 @@ async def match_job(job_id: UUID, payload: MatchInput, db: Session = Depends(get
     if payload.provider != "local":
         if not payload.model:
             raise HTTPException(422, "Enter a model name.")
-        if payload.provider == "openrouter" and not payload.hosted_consent:
-            raise HTTPException(422, "Approve sending the job description to OpenRouter for this run.")
+        if payload.provider in {"openrouter", "gemini"} and not payload.hosted_consent:
+            label = "OpenRouter" if payload.provider == "openrouter" else "Google AI Studio"
+            raise HTTPException(422, f"Approve sending the job description to {label} for this run.")
         today = datetime.now(timezone.utc).date()
         used = row.usage_count if row.usage_day == today else 0
         if used >= DAILY_AI_RUNS:

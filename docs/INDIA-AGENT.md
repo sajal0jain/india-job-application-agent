@@ -261,3 +261,19 @@ approve applications or generate PDFs automatically.
   Existing Gmail reconciliation checks explicit requisition IDs when present.
   The outcome counts show current stages and the last recorded stage before
   rejection. Older records without that transition appear as Unknown.
+
+## Direct Google AI Studio (Gemini)
+
+Create a key in [Google AI Studio](https://aistudio.google.com/apikey).
+Under **Settings → Models**, choose **Google AI Studio (Gemini)** as Primary,
+choose `gemini-3.5-flash-lite`, and save the key in the API key field. You
+can also set `GEMINI_API_KEY` in your private `.env` and recreate the backend.
+Gemini API usage has its own billing and quota. See the
+[Google AI Studio model page](https://aistudio.google.com/docs/models/gemini-3.5-flash-lite).
+
+The Primary model handles upstream PDF extraction, which sends extracted PDF
+text to the selected provider. For matching in **Application queue**, choose
+Google AI Studio in the job's provider picker and consent for that run. The
+queue sends only the posting text and scores CV evidence locally. Use the
+local matching option to run without a provider. Check Google AI Studio for
+actual API usage and charges.

@@ -250,3 +250,23 @@ def test_hiring_details_and_email_requisition_review(candidate, test_db):
     }
     with pytest.raises(HTTPException, match="status changed"):
         routes.email_confirm(decision, test_db)
+
+
+@pytest.mark.asyncio
+async def test_gemini_queue_requires_consent_and_sends_posting_only(candidate, test_db, monkeypatch):
+    job_id, _, _ = candidate
+    request = routes.MatchInput(provider="gemini", model="gemini-3.5-flash-lite")
+    monkeypatch.setattr(routes.llm_client, "provider_api_key", lambda db, name: "sample-gemini-key" if name == "gemini" else "")
+    with pytest.raises(HTTPException, match="Approve sending.*Google AI Studio"):
+        await routes.match_job(job_id, request, test_db)
+
+    async def google(prompt, system, model, key, cap, **options):
+        assert prompt == DESCRIPTION and "Asha" not in prompt
+        assert model == request.model and key == "sample-gemini-key" and cap == 600
+        assert options == {"max_retries": 0}
+        return {"text": '{"requirements":["Lead analytics teams.","Invent a doctorate"]}'}
+
+    monkeypatch.setattr(routes.llm_client, "call_gemini", google)
+    request.hosted_consent = True
+    draft = await routes.match_job(job_id, request, test_db)
+    assert [r["requirement"] for r in draft["analysis"]["evidence"]] == ["Lead analytics teams."]

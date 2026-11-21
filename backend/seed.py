@@ -65,6 +65,7 @@ DEFAULT_SETTINGS = {
     "llm_effort": ("", "Reasoning effort for the Primary model (empty = the model's default; values depend on the provider)"),
     # One key per provider (3.1): every model slot on that provider uses it. Empty = the env var of
     # the same name in upper case, for the owner and members on 'inherit' (never a member on 'own').
+    "gemini_api_key": ("", "Google AI Studio API key (empty = GEMINI_API_KEY from .env)"),
     "anthropic_api_key": ("", "Claude API key, used by every model slot on Claude API (empty = ANTHROPIC_API_KEY from .env)"),
     "openai_api_key": ("", "OpenAI API key, used by every model slot on OpenAI (empty = OPENAI_API_KEY from .env)"),
     "openrouter_api_key": ("", "OpenRouter API key, used by every model slot on OpenRouter (empty = OPENROUTER_API_KEY from .env)"),
@@ -82,6 +83,8 @@ DEFAULT_SETTINGS = {
     "scoring_llm_model": ("", "Resume scoring model override (empty = use Primary)"),
     "scoring_llm_effort": ("", "Reasoning effort for the scoring override (empty = the Primary's on the same provider, else the model's default)"),
     "llm_models_list": (json.dumps([
+        {"provider": "gemini", "model": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
+        {"provider": "gemini", "model": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite"},
         {"provider": "claude_api", "model": "claude-sonnet-5"},
         {"provider": "claude_api", "model": "claude-sonnet-4-6"},
         {"provider": "claude_api", "model": "claude-opus-5-5"},
@@ -444,7 +447,7 @@ INT_SETTING_KEYS = _int_setting_keys()
 
 # Providers the LLM dispatcher knows how to call. "" means "inherit the primary
 # llm_provider", which every per-feature prefix does.
-_LLM_PROVIDERS = {"", "claude_api", "claude_code", "codex_cli", "antigravity_cli", "opencode_go", "openai", "ollama", "lmstudio", "openrouter"}
+_LLM_PROVIDERS = {"", "claude_api", "claude_code", "codex_cli", "antigravity_cli", "opencode_go", "openai", "ollama", "lmstudio", "openrouter", "gemini"}
 
 # Depth words. `tailor_auto_quick_score` also honours legacy boolean spellings
 # (see routes_resumes._resolve_chain_score_depth).

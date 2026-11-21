@@ -273,6 +273,7 @@ async def _stream_claude(prompt, system, model, api_key, max_tokens, cached_pref
             yield text
 
 
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # OpenRouter app attribution (lists the app on openrouter.ai/apps); ignored by other endpoints.
 OPENROUTER_HEADERS = {"HTTP-Referer": "https://github.com/vesaias/JobNavigator", "X-Title": "JobNavigator"}
@@ -391,11 +392,12 @@ async def _stream_openai(prompt, system, model, api_key, max_tokens, base_url=No
 
 
 _KEYED_PROVIDERS = {"claude_api": "Claude API", "openai": "OpenAI", "openrouter": "OpenRouter",
-                    "opencode_go": "OpenCode Go"}
+                    "opencode_go": "OpenCode Go", "gemini": "Google AI Studio"}
 OPENCODE_GO_KEY_ENV = "OPENCODE_API_KEY"
 OPENAI_KEY_ENV = "OPENAI_API_KEY"
 ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
 OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"
+GEMINI_KEY_ENV = "GEMINI_API_KEY"
 
 
 def _env_key(env_name: str) -> str:
@@ -493,6 +495,8 @@ async def _dispatch(provider: str, model: str, api_key: str,
         return await _call_antigravity_cli(combined, system, model, max_tokens)
     elif provider == "openai":
         return await _call_openai(combined, system, model, _openai_key(api_key), max_tokens, effort=effort)
+    elif provider == "gemini":
+        return await call_gemini(combined, system, model, api_key, max_tokens)
     elif provider == "openrouter":
         # OpenRouter is OpenAI-API-compatible — same client, different base URL.
         # One key reaches every vendor's models (model slug is vendor-prefixed).
@@ -734,6 +738,29 @@ async def _call_opencode_go(prompt: str, system: str, model: str, api_key: str, 
         if mapped is not None:
             raise mapped from e
         raise
+
+
+async def call_gemini(prompt, system, model, api_key, max_tokens, *, max_retries=None):
+    """Direct Google AI Studio requests using Google's compatible API."""
+    key = api_key or _env_key(GEMINI_KEY_ENV)
+    if not key:
+        raise NonRetryableLLMError(
+            "No API key for Google AI Studio — set it in Settings › Models (or GEMINI_API_KEY in .env)")
+    try:
+        return await _call_openai(
+            prompt, system, model, key, max_tokens,
+            base_url=GEMINI_BASE_URL, max_retries=max_retries,
+        )
+    except NonRetryableLLMError:
+        raise
+    except Exception as error:
+        status = getattr(error, "status_code", None)
+        if status in (400, 401, 403, 404):
+            raise NonRetryableLLMError(
+                f"Google AI Studio returned HTTP {status}. Check the API key and model in Settings › Models."
+            ) from None
+        message = f"Google AI Studio request failed (HTTP {status})." if status else "Google AI Studio request failed."
+        raise RuntimeError(message) from None
 
 
 async def _call_openrouter(prompt: str, system: str, model: str, api_key: str, max_tokens: int,

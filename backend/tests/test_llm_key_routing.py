@@ -677,3 +677,22 @@ def test_cleanup_marker_is_never_served_or_writable(client, test_db):
     clear_seeded_local_urls(test_db)
     assert LOCAL_URLS_CLEARED_KEY not in client.get("/api/settings").json()
     assert client.patch("/api/settings", json={LOCAL_URLS_CLEARED_KEY: ""}).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_direct_gemini_dispatch_uses_google_key_and_endpoint(monkeypatch):
+    from backend.analyzer import llm_client
+
+    async def request(prompt, system, model, key, max_tokens, **options):
+        assert (model, key, max_tokens) == ("gemini-3.5-flash-lite", "sample-key", 8000)
+        assert options["base_url"] == "https://generativelanguage.googleapis.com/v1beta/openai/"
+        return {"text": "{}"}
+
+    monkeypatch.setattr(llm_client, "_call_openai", request)
+    monkeypatch.setenv("GEMINI_API_KEY", "sample-key")
+    monkeypatch.setattr(llm_client, "_own_login_account", lambda: None)
+    result = await llm_client._dispatch("gemini", "gemini-3.5-flash-lite", "", "sample", "", 8000)
+    assert result["text"] == "{}"
+    monkeypatch.setattr(llm_client, "_own_login_account", lambda: "member")
+    with pytest.raises(llm_client.NonRetryableLLMError, match="No API key for Google AI Studio"):
+        await llm_client._dispatch("gemini", "gemini-3.5-flash-lite", "", "sample", "", 8000)

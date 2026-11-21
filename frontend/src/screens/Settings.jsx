@@ -56,6 +56,7 @@ const PROVIDERS = [
   ['ollama', 'Ollama (Local)'],
   ['lmstudio', 'LM Studio (Local)'],
   ['openrouter', 'OpenRouter'],
+  ['gemini', 'Google AI Studio (Gemini)'],
 ]
 const PROVIDER_LABEL = Object.fromEntries(PROVIDERS)
 // providers whose catalog /api/llm/models can search live
@@ -64,7 +65,7 @@ const SEARCHABLE = ['openrouter', 'openai', 'claude_api', 'claude_code', 'openco
 const KEYLESS = ['claude_code', 'codex_cli', 'antigravity_cli', 'ollama', 'lmstudio', '']
 // One API key per provider (backend accounts/settings.py PROVIDER_KEY_SETTINGS): every slot on a
 // provider shows and saves the same key, so switching a slot's provider back keeps its key.
-const PROVIDER_KEY = { claude_api: 'anthropic_api_key', openai: 'openai_api_key', openrouter: 'openrouter_api_key', opencode_go: 'opencode_api_key' }
+const PROVIDER_KEY = { claude_api: 'anthropic_api_key', openai: 'openai_api_key', openrouter: 'openrouter_api_key', gemini: 'gemini_api_key', opencode_go: 'opencode_api_key' }
 const keyHelp = (prov, member) => `Saved for ${PROVIDER_LABEL[prov] || prov}: every model slot on it uses this key.`
   + (member || !PROVIDER_KEY[prov] ? '' : ` Empty uses ${PROVIDER_KEY[prov].toUpperCase()} from .env.`)
 // Provider settings whose value 'claude_code' makes the Claude Code token row relevant.

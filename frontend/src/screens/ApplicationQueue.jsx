@@ -127,6 +127,7 @@ function JobReview({ jobId, facts, busy, run, refreshQueue }) {
   const [description, setDescription] = useState('')
   const [provider, setProvider] = useState('local')
   const [model, setModel] = useState('')
+  const hosted = provider === 'openrouter' || provider === 'gemini'
   const [consent, setConsent] = useState(false)
   const [selection, setSelection] = useState([])
   const [answers, setAnswers] = useState([])
@@ -195,16 +196,17 @@ function JobReview({ jobId, facts, busy, run, refreshQueue }) {
       <p><label htmlFor="india-posting">Posting text</label></p>
       <Textarea id="india-posting" value={description} onChange={setDescription} maxLength={16000} rows={5} disabled={!!busy} />
       <p><label>Matching provider <select value={provider} disabled={!!busy} onChange={(event) => {
-        setProvider(event.target.value); setConsent(false)
+        setProvider(event.target.value); setConsent(false); setModel(event.target.value === 'gemini' ? 'gemini-3.5-flash-lite' : '')
       }}>
         <option value="local">Local keyword matching (no model)</option>
         <option value="ollama">Local Ollama</option>
         <option value="openrouter">Hosted OpenRouter</option>
+        <option value="gemini">Google AI Studio (Gemini)</option>
       </select></label></p>
       {provider !== 'local' && <Input ariaLabel="Model name" placeholder="Model name" value={model} onChange={setModel} disabled={!!busy} />}
-      {provider === 'openrouter' && <p><label><input type="checkbox" checked={consent} disabled={!!busy}
-        onChange={(event) => setConsent(event.target.checked)} /> Send this posting text to OpenRouter for one run.</label></p>}
-      <Button disabled={!!busy || !facts.length || !description.trim() || (provider !== 'local' && !model.trim()) || (provider === 'openrouter' && !consent)}
+      {hosted && <p><label><input type="checkbox" checked={consent} disabled={!!busy}
+        onChange={(event) => setConsent(event.target.checked)} /> Send this posting text to {provider === 'gemini' ? 'Google AI Studio' : 'OpenRouter'} for one run.</label></p>}
+      <Button disabled={!!busy || !facts.length || !description.trim() || (provider !== 'local' && !model.trim()) || (hosted && !consent)}
         onClick={() => run('match', async () => {
           await write('match', { description, provider, model, hosted_consent: consent })
           setConsent(false)

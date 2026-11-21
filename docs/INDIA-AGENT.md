@@ -225,7 +225,7 @@ delays public listings by 24 hours.
 
 ## Job alerts and CV ranking
 
-**Searches → Import job alerts** accepts pasted alert content or an email
+**Searches → Import a job alert** accepts a single employer posting URL, pasted alert content, or an email
 saved as `.eml`. Preview the recognized LinkedIn, Naukri, Foundit, and
 Instahyre direct posting links, correct their titles, add employer and
 location, and optionally paste the posting text. Import each relevant job

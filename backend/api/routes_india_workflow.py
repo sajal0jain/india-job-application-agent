@@ -20,7 +20,7 @@ from backend.analyzer.india_workflow import (
 )
 from backend.analyzer.model_json import parse_model_json
 from backend.api.routes_resumes import _render_pdf
-from backend.scraper.alert_intake import extract_alert, portal
+from backend.scraper.alert_intake import employer_link, extract_alert, portal
 from backend.scraper.india_sweep import import_candidates
 from backend.email_monitor.requisition import email_ids, matching_applications
 from backend.email_monitor.response_parser import classify_email
@@ -406,6 +406,7 @@ class AlertText(Input):
 class AlertJob(Input):
     url: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
     title: Text
+    direct_employer: bool = False
     company: str = Field(default="", max_length=240)
     location: str = Field(default="", max_length=500)
     description: str = Field(default="", max_length=16000)
@@ -418,9 +419,11 @@ def alert_preview(payload: AlertText):
 
 @router.post("/alerts/import")
 def alert_import(payload: AlertJob):
-    if not portal(payload.url):
-        raise HTTPException(422, "Provide a direct job link from a supported portal.")
-    result = import_candidates([payload.model_dump()], "india_alert")
+    if not (portal(payload.url) or (payload.direct_employer and employer_link(payload.url))):
+        raise HTTPException(422, "Provide a direct job link from an employer or supported portal.")
+    postings = [payload.model_dump(exclude={"direct_employer"})]
+    result = (import_candidates(postings, "india_alert", manual=True) if payload.direct_employer
+              else import_candidates(postings, "india_alert"))
     if not (result["added"] or result["duplicate"]):
         raise HTTPException(422, "The role or location falls outside the India leadership search.")
     return result

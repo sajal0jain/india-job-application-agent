@@ -120,15 +120,15 @@ async def portal_page(client, source, keys, query, area, page):
     ]
 
 
-def import_candidates(postings, source):
+def import_candidates(postings, source, *, manual=False):
     counts = {"matches": 0, "review": 0, "added": 0, "duplicate": 0}
     with SessionLocal() as db:
         for posting in postings:
             title = (posting.get("title") or "").strip()
-            if not role_level(title):
+            if not manual and not role_level(title):
                 continue
             decision, _, location = location_match(posting)
-            if decision == "outside":
+            if decision == "outside" and not manual:
                 continue
             url = (posting.get("url") or "").strip()
             try:

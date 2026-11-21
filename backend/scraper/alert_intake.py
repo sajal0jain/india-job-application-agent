@@ -29,16 +29,36 @@ def portal(url):
     return None
 
 
+def employer_link(url):
+    if len(url) > 2000 or not URL.fullmatch(url):
+        return False
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    return bool(
+        parsed.scheme == "https" and parsed.netloc == parsed.hostname
+        and re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}", parsed.hostname or "")
+        and parsed.path.strip("/")
+    )
+
+
 def extract_alert(text):
+    direct = text.strip()
+    if employer_link(direct) and not portal(direct):
+        return [{"url": direct, "title": "", "portal": "Employer website", "direct_employer": True}]
     message = Parser(policy=policy.default).parsestr(text)
     body = message.get_body(preferencelist=("html", "plain"))
     if message.keys() and body is not None:
         text = body.get_content()
         if not isinstance(text, str):
             return []
-    soup = BeautifulSoup(text, "html.parser")
-    links = [(a["href"], a.get_text(" ", strip=True)) for a in soup.find_all("a", href=True)]
-    for line in soup.get_text().splitlines():
+    links = []
+    if "<" in text:
+        soup = BeautifulSoup(text, "html.parser")
+        links = [(a["href"], a.get_text(" ", strip=True)) for a in soup.find_all("a", href=True)]
+        text = soup.get_text()
+    for line in text.splitlines():
         for match in URL.finditer(line):
             links.append((match.group().rstrip(".,)>"), line[:match.start()].strip(" -|:")))
     candidates = {}

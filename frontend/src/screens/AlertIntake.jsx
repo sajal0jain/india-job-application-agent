@@ -26,8 +26,8 @@ export default function AlertIntake() {
 
   return (
     <Card>
-      <Heading strong>Import job alerts</Heading>
-      <p>Paste alert text, or load an email saved as .eml. The preview reads direct posting links from LinkedIn, Naukri, Foundit, and Instahyre.</p>
+      <Heading strong>Import a job link or alert</Heading>
+      <p>Paste one employer job link, or load a job alert from LinkedIn, Naukri, Foundit, or Instahyre.</p>
       <input type="file" accept=".eml,.txt,.html" aria-label="Load job alert email" disabled={busy}
         onChange={(event) => {
           const file = event.target.files[0]
@@ -40,7 +40,7 @@ export default function AlertIntake() {
       <Button disabled={busy || !text.trim()} onClick={() => request(async () => {
         const { data } = await api.post('/india-workflow/alerts/preview', { text })
         setJobs(data.jobs)
-        if (!data.jobs.length) setMessage('No direct posting links found. Copy the job link from the portal and paste it here.')
+        if (!data.jobs.length) setMessage('No posting links found. Paste a single HTTPS job URL, or upload a supported alert.')
       })}>Preview alert</Button>
       {message && <p role="status">{message}</p>}
       {jobs.map((job) => (
@@ -55,6 +55,7 @@ export default function AlertIntake() {
           <p><Button disabled={busy || job.done || !job.title.trim()} onClick={() => request(async () => {
             const { data } = await api.post('/india-workflow/alerts/import', {
               url: job.url, title: job.title, company: job.company || '', location: job.location || '', description: job.description || '',
+              ...(job.direct_employer ? { direct_employer: true } : {}),
             })
             update(job.url, { done: true, result: data.added ? 'Added to Jobs' : 'Already in Jobs' })
           })}>{job.result || 'Import job for review'}</Button></p>

@@ -270,3 +270,19 @@ async def test_gemini_queue_requires_consent_and_sends_posting_only(candidate, t
     request.hosted_consent = True
     draft = await routes.match_job(job_id, request, test_db)
     assert [r["requirement"] for r in draft["analysis"]["evidence"]] == ["Lead analytics teams."]
+
+
+def test_single_blackrock_link_can_be_imported(test_db, monkeypatch):
+    from contextlib import nullcontext
+    from backend.scraper import india_sweep
+
+    monkeypatch.setattr(india_sweep, "SessionLocal", lambda: nullcontext(test_db))
+    url = "https://careers.blackrock.com/job/-/-/45831/103377271072"
+    preview = routes.alert_preview(routes.AlertText(text=url))
+    assert preview["jobs"] == [{"url": url, "title": "", "portal": "Employer website", "direct_employer": True}]
+    job = routes.AlertJob(url=url, title="Data Science Lead", company="BlackRock",
+                          location="Gurugram", direct_employer=True)
+    assert routes.alert_import(job)["added"] == 1
+    assert routes.alert_import(job)["duplicate"] == 1
+    assert test_db.query(Job).one().url == url
+    assert routes.alert_preview(routes.AlertText(text=f"Unrelated email links\n{url}"))["jobs"] == []

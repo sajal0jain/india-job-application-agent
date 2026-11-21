@@ -407,7 +407,7 @@ def _delete_plan():
     from backend.models import db as m
     return [
         ("tracer_clicks", m.TracerClickEvent), ("tracer_links", m.TracerLink),
-        ("india_workflow_drafts", m.IndiaWorkflowDraft), ("india_workflow_profiles", m.IndiaWorkflowProfile),
+        ("india_hiring_details", m.IndiaHiringDetails), ("india_workflow_drafts", m.IndiaWorkflowDraft), ("india_workflow_profiles", m.IndiaWorkflowProfile),
         ("interviews", m.Interview), ("applications", m.Application),
         ("cover_letters", m.CoverLetter), ("resumes", m.Resume),
         ("job_locations", m.JobLocation), ("llm_calls", m.LlmCallLog),
@@ -547,7 +547,7 @@ def build_export(db, account_id, owner_id) -> "tempfile.SpooledTemporaryFile":
         ("persona", m.Persona), ("resumes", m.Resume), ("cover_letters", m.CoverLetter),
         ("searches", m.Search), ("companies", m.Company), ("jobs", m.Job),
         ("job_locations", m.JobLocation), ("applications", m.Application),
-        ("india_workflow_drafts", m.IndiaWorkflowDraft), ("india_workflow_profiles", m.IndiaWorkflowProfile),
+        ("india_hiring_details", m.IndiaHiringDetails), ("india_workflow_drafts", m.IndiaWorkflowDraft), ("india_workflow_profiles", m.IndiaWorkflowProfile),
         ("interviews", m.Interview), ("tracer_links", m.TracerLink),
         ("tracer_click_events", m.TracerClickEvent), ("activity_log", m.ActivityLog),
         ("llm_call_log", m.LlmCallLog), ("job_runs", m.JobRun), ("scrape_log", m.ScrapeLog),

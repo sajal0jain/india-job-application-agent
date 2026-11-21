@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
+import EmployerWatchlist from './EmployerWatchlist'
 import { Button, Card, Heading, Input, Link, Select } from '../ui'
 
 export default function IndiaDiscovery() {
@@ -132,6 +133,7 @@ function ScheduledDiscovery() {
       <Button disabled={starting || status.running || (!status.boards && !status.portals.length)} onClick={start}>
         {starting || status.running ? 'Searching…' : 'Run configured sources'}
       </Button>
+      <EmployerWatchlist onSave={(boards) => setStatus((previous) => ({ ...previous, boards }))} />
       {error && <p role="alert">{error}</p>}
       {status.last && (
         <>

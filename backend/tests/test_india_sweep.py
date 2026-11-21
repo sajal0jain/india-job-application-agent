@@ -49,7 +49,8 @@ def test_import_marks_location_review_and_skips_duplicate(test_db, monkeypatch):
     assert test_db.query(Job).count() == 2
 
 
-def test_catalog_and_schedule(monkeypatch):
+def test_catalog_and_schedule(test_db, monkeypatch):
+    monkeypatch.setattr(discovery, "SessionLocal", lambda: nullcontext(test_db))
     lever_board = "https://jobs.lever.co/sample"
     workday_board = "https://sample.wd5.myworkdayjobs.com/en-US/External"
     monkeypatch.setenv("JN_INDIA_EMPLOYER_BOARDS", f"{lever_board}, {workday_board}, {lever_board}/")
@@ -64,6 +65,7 @@ def test_catalog_and_schedule(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sweep_does_not_overlap(monkeypatch):
+    monkeypatch.setattr(discovery, "employer_boards", lambda: [])
     monkeypatch.setenv("JOOBLE_API_KEY", "test-key")
     scheduler = discovery.IndiaSweep()
     pending = asyncio.Event()
@@ -80,7 +82,8 @@ async def test_sweep_does_not_overlap(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_board_failure_isolated_from_portal_pagination(monkeypatch):
+async def test_board_failure_isolated_from_portal_pagination(test_db, monkeypatch):
+    monkeypatch.setattr(discovery, "SessionLocal", lambda: nullcontext(test_db))
     monkeypatch.setenv("JN_INDIA_EMPLOYER_BOARDS", "https://jobs.lever.co/sample")
     monkeypatch.setenv("JOOBLE_API_KEY", "test-key")
     monkeypatch.setenv("ADZUNA_APP_ID", "")
@@ -133,3 +136,25 @@ async def test_remotive_runs_without_portal_keys(monkeypatch):
     assert scheduler.configured()
     assert scheduler.status()["portals"] == ["Remotive"]
     assert await discovery.sweep() == [{"source": "Remotive", "received": 0, "added": 0}]
+
+
+def test_dashboard_watchlist_replaces_environment_and_rejects_invalid_boards(test_db, monkeypatch):
+    from backend.api import routes_india_discovery as api
+
+    monkeypatch.setattr(discovery, "SessionLocal", lambda: nullcontext(test_db))
+    monkeypatch.setenv("JN_INDIA_EMPLOYER_BOARDS", "https://jobs.lever.co/previous")
+    assert discovery.employer_boards() == ["https://jobs.lever.co/previous"]
+    monkeypatch.setattr(api, "owner_account_id", lambda: None)
+    with pytest.raises(api.HTTPException) as blocked:
+        api.save_watchlist(api.WatchlistRequest(boards=[]), test_db)
+    assert blocked.value.status_code == 403
+
+    monkeypatch.setattr(api, "owner_account_id", lambda: api.current_account.get())
+    with pytest.raises(api.HTTPException) as invalid:
+        api.save_watchlist(api.WatchlistRequest(boards=["https://example.invalid/private"]), test_db)
+    assert invalid.value.status_code == 422
+    board = "https://jobs.ashbyhq.com/approved"
+    assert api.save_watchlist(api.WatchlistRequest(boards=[board, board + "/"]), test_db) == {"boards": [board]}
+    assert discovery.employer_boards() == [board]
+    api.save_watchlist(api.WatchlistRequest(boards=[]), test_db)
+    assert discovery.employer_boards() == []

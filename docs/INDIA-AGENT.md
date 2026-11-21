@@ -240,3 +240,24 @@ insufficient posting text. Where a feed includes posting excerpts, new
 imports retain them. If a job has no description, open it and paste the
 employer's posting text to generate and review a draft. Ranking does not
 approve applications or generate PDFs automatically.
+
+## Employer watchlist, hiring details, and email review
+
+- **Searches → India leadership discovery → Automatic search → Edit employer
+  watchlist.** The owner can paste approved employer board URLs, one per
+  line. The first edit starts from the configured `.env` list. Saving writes
+  the replacement list to the local database. Future sweeps use that saved
+  list, including an intentionally empty list. Open the sweep report to see
+  per-board results.
+- **Application queue → open a job → Review India hiring details.** Record
+  employer-stated fixed and variable CTC, accepted notice period, buyout,
+  workplace policy, team remit, and the source. Leave unknown values blank.
+  These fields are local notes and are separate from your verified facts and
+  approved autofill payload.
+- **Applications → Email review and hiring outcomes.** Paste a recruiter
+  message containing a job or requisition ID. Preview the matching tracked
+  records, choose the application and its new status, then confirm.
+  The preview uses the text you supply and does not connect to a mailbox.
+  Existing Gmail reconciliation checks explicit requisition IDs when present.
+  The outcome counts show current stages and the last recorded stage before
+  rejection. Older records without that transition appear as Unknown.

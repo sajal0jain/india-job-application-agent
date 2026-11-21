@@ -17,6 +17,7 @@ import httpx
 from backend.config import GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
 from backend.models.db import SessionLocal, Application
 from backend.accounts.settings import get_setting, set_setting
+from backend.email_monitor.requisition import email_ids, matching_applications
 from backend.email_monitor.response_parser import classify_email
 
 logger = logging.getLogger("jobnavigator.gmail")
@@ -324,6 +325,9 @@ async def check_emails():
 
                         # Guards against the LLM force-matching an email onto the wrong company's
                         # application (e.g. an Amazon email onto a Kpler application).
+                        requisitions = email_ids(f"{subject or ''}\n{body or ''}")
+                        if matched_app and requisitions and not matching_applications([matched_app], requisitions):
+                            matched_app = None
                         if matched_app and not _email_matches_company(
                             matched_company, from_header, subject, body, sender_domain
                         ):
@@ -452,6 +456,14 @@ def _match_email_to_application(db, from_header: str, subject: str, body: str, s
     match is used only as a fallback after every app is checked for a stronger sender match."""
     active_statuses = ["applied", "interview"]
     apps = db.query(Application).filter(Application.status.in_(active_statuses)).all()
+
+    identifiers = email_ids(f"{subject or ''}\n{body or ''}")
+    if identifiers:
+        exact = matching_applications(apps, identifiers)
+        anchored = [app for app in exact if _email_matches_company(
+            app.job.company or "", from_header, subject, body, sender_domain
+        )]
+        return anchored[0] if len(anchored) == 1 else None
 
     body_lower = (body or "").lower()
     body_fallback = None

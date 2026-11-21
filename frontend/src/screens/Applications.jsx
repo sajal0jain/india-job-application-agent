@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import TrackingReview from './TrackingReview'
 import { track } from '../telemetry'
 import { useFlushBeforeSwitch } from '../accounts'
 import { useToasts, ToastStack } from '../Toast'
@@ -472,6 +473,7 @@ export default function Applications() {
         </div>
       </HeaderRow>
 
+      <TrackingReview onConfirmed={() => load()} />
       {/* toolbar */}
       <HeaderRow pad="0 30px 14px 24px" align="center" style={{ gap: 8 }}>
         {/* ui: keep — search field wrapper (Input role), not a pill; h32 tracks ui.jsx's boxed SearchInput so the two read as one control */}

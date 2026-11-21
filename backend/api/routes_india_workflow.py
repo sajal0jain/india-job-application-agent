@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend.analyzer import llm_client
 from backend.analyzer.india_workflow import (
@@ -22,7 +22,9 @@ from backend.analyzer.model_json import parse_model_json
 from backend.api.routes_resumes import _render_pdf
 from backend.scraper.alert_intake import extract_alert, portal
 from backend.scraper.india_sweep import import_candidates
-from backend.models.db import Application, IndiaWorkflowDraft, IndiaWorkflowProfile, Job, get_db, record_transition
+from backend.email_monitor.requisition import email_ids, matching_applications
+from backend.email_monitor.response_parser import classify_email
+from backend.models.db import Application, IndiaHiringDetails, IndiaWorkflowDraft, IndiaWorkflowProfile, Job, get_db, record_transition
 
 router = APIRouter(prefix="/india-workflow", tags=["applications"])
 logger = logging.getLogger(__name__)
@@ -437,3 +439,85 @@ def shortlist(db: Session = Depends(get_db)):
         })
     results.sort(key=lambda item: item["score"] if item["score"] is not None else -1, reverse=True)
     return {"ready": True, "jobs": results}
+
+
+class HiringDetails(Input):
+    fixed_ctc: str = Field(default="", max_length=180)
+    variable_ctc: str = Field(default="", max_length=180)
+    notice_period: str = Field(default="", max_length=180)
+    buyout: str = Field(default="", max_length=180)
+    work_location: str = Field(default="", max_length=180)
+    team_scope: str = Field(default="", max_length=350)
+    source: str = Field(default="", max_length=360)
+
+
+@router.get("/jobs/{job_id}/hiring")
+def get_hiring_details(job_id: UUID, db: Session = Depends(get_db)):
+    get_job(db, job_id)
+    row = db.query(IndiaHiringDetails).filter_by(job_id=job_id).one_or_none()
+    return row.details if row else HiringDetails().model_dump()
+
+
+@router.put("/jobs/{job_id}/hiring")
+def save_hiring_details(job_id: UUID, payload: HiringDetails, db: Session = Depends(get_db)):
+    get_job(db, job_id, lock=True)
+    row = db.query(IndiaHiringDetails).filter_by(job_id=job_id).one_or_none()
+    if row is None:
+        row = IndiaHiringDetails(job_id=job_id)
+        db.add(row)
+    row.details = payload.model_dump()
+    db.commit()
+    return row.details
+
+
+class EmailReview(Input):
+    text: str = Field(min_length=1, max_length=50000)
+
+
+class EmailDecision(Input):
+    application_id: UUID
+    expected_status: Literal["applied", "interview", "offer", "rejected"]
+    status: Literal["applied", "interview", "offer", "rejected"]
+    confirmed: Literal[True]
+
+
+@router.post("/tracking/email-preview")
+def email_preview(payload: EmailReview, db: Session = Depends(get_db)):
+    identifiers = email_ids(payload.text)
+    if not identifiers:
+        return {"identifiers": [], "classification": "ambiguous", "applications": []}
+    applications = db.query(Application).options(joinedload(Application.job)).all()
+    matches = matching_applications(applications, identifiers)
+    classification = classify_email("", payload.text)["classification"]
+    return {"identifiers": sorted(identifiers), "classification": classification,
+            "applications": [{"id": str(app.id), "title": app.job.title, "company": app.job.company,
+                              "status": app.status} for app in matches]}
+
+
+@router.post("/tracking/email-confirm")
+def email_confirm(payload: EmailDecision, db: Session = Depends(get_db)):
+    app = (db.query(Application).filter_by(id=payload.application_id)
+           .with_for_update().one_or_none())
+    if app is None:
+        raise HTTPException(404, "Application not found.")
+    if app.status != payload.expected_status:
+        raise HTTPException(409, "The status changed while you were reviewing. Preview the email again.")
+    record_transition(app, payload.status, "email_review")
+    db.commit()
+    return {"status": app.status}
+
+
+@router.get("/tracking/outcomes")
+def tracking_outcomes(db: Session = Depends(get_db)):
+    stages = {"applied": 0, "interview": 0, "offer": 0, "rejected": 0}
+    before_rejection = {"Applied": 0, "Interview": 0, "Offer": 0, "Unknown": 0}
+    for app in db.query(Application).all():
+        if app.status in stages:
+            stages[app.status] += 1
+        if app.status != "rejected":
+            continue
+        rejection = next((entry for entry in reversed(app.status_transitions or [])
+                          if entry.get("to") == "rejected"), {})
+        previous = (rejection.get("from") or "").capitalize()
+        before_rejection[previous if previous in before_rejection else "Unknown"] += 1
+    return {"stages": stages, "before_rejection": before_rejection}

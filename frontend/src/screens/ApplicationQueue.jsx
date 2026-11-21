@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
 import api from '../api'
+import HiringDetails from './HiringDetails'
 import { Button, Card, Heading, Input, Link, PageTitle, Textarea } from '../ui'
 
 const PATH = '/india-workflow'
@@ -188,6 +189,7 @@ function JobReview({ jobId, facts, busy, run, refreshQueue }) {
     <Card>
       <Heading strong>{job.title} · {job.company}</Heading>
       {job.url && <Link href={job.url} target="_blank" rel="noopener noreferrer">Open employer posting</Link>}
+      <HiringDetails route={route} />
       {job.tracked && <p>This requisition is already in Applications.</p>}
       {!!job.similar_applications && <p>Review {job.similar_applications} tracked applications with the same employer and title.</p>}
       <p><label htmlFor="india-posting">Posting text</label></p>

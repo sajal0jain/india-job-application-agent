@@ -210,3 +210,43 @@ def test_shortlist_ranks_verified_evidence_and_flags_thin_text(candidate, test_d
     assert scores["jobs"][0]["job_id"] == str(job_id)
     assert scores["jobs"][0]["score"] > 40
     assert scores["jobs"][1]["score"] is None
+
+
+def test_hiring_details_and_email_requisition_review(candidate, test_db):
+    from backend.email_monitor.gmail_client import _match_email_to_application
+
+    first_id, _, _ = candidate
+    first_job = test_db.query(Job).filter_by(id=first_id).one()
+    first_job.url = "https://example.wd5.myworkdayjobs.com/en-US/External/job/Gurgaon/Director_JR-12345"
+    second = Job(company="Example", title="Director of Data Science", location="Gurugram",
+                 url="https://example.wd5.myworkdayjobs.com/en-US/External/job/Gurgaon/Director_JR-67890",
+                 external_id="second-requisition")
+    test_db.add(second)
+    test_db.flush()
+    other = Application(job_id=first_id, status="applied")
+    target = Application(job_id=second.id, status="interview")
+    test_db.add_all([other, target])
+    test_db.commit()
+
+    details = routes.HiringDetails(fixed_ctc="₹50 lakh fixed", variable_ctc="15% target",
+                                   notice_period="60 days", source="Recruiter message")
+    routes.save_hiring_details(second.id, details, test_db)
+    assert routes.get_hiring_details(second.id, test_db)["fixed_ctc"] == "₹50 lakh fixed"
+    assert routes.get_hiring_details(first_id, test_db)["fixed_ctc"] == ""
+
+    message = "Requisition ID: JR-67890. We will not be moving forward."
+    preview = routes.email_preview(routes.EmailReview(text=message), test_db)
+    assert [row["id"] for row in preview["applications"]] == [str(target.id)]
+    assert _match_email_to_application(test_db, "Example <jobs@example.com>", "", message, "example.com").id == target.id
+    unknown = "Requisition ID: JR-99999."
+    assert _match_email_to_application(test_db, "Example <jobs@example.com>", "", unknown, "example.com") is None
+
+    decision = routes.EmailDecision(application_id=target.id, expected_status="interview",
+                                    status="rejected", confirmed=True)
+    assert target.status == "interview"
+    assert routes.email_confirm(decision, test_db) == {"status": "rejected"}
+    assert routes.tracking_outcomes(test_db)["before_rejection"] == {
+        "Applied": 0, "Interview": 1, "Offer": 0, "Unknown": 0,
+    }
+    with pytest.raises(HTTPException, match="status changed"):
+        routes.email_confirm(decision, test_db)

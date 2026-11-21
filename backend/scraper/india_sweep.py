@@ -1,6 +1,7 @@
 """Opt-in recurring discovery from portal APIs and an employer allowlist."""
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -10,6 +11,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import httpx
 
 from backend.accounts.context import owner_context, run_in_clean_context
+from backend.accounts.settings import get_install_setting
 from backend.analyzer.location import apply_location_to_job
 from backend.analyzer.work_arrangement import apply_arrangement_to_job
 from backend.models.db import Job, SessionLocal
@@ -44,7 +46,18 @@ def portal_pages():
     return max(1, integer_setting("JN_INDIA_PORTAL_PAGES", 2))
 
 
+WATCHLIST_KEY = "india_employer_watchlist"
+
+
 def employer_boards():
+    with SessionLocal() as db:
+        value = get_install_setting(db, WATCHLIST_KEY)
+    if value is not None:
+        return json.loads(value)
+    return environment_boards()
+
+
+def environment_boards():
     return list(dict.fromkeys(
         url.strip().rstrip("/") for url in os.getenv("JN_INDIA_EMPLOYER_BOARDS", "").split(",")
         if url.strip()
@@ -230,7 +243,7 @@ class IndiaSweep:
 
     def start(self):
         hours = schedule_hours()
-        if hours and self.configured():
+        if hours:
             self.scheduler = asyncio.create_task(self.repeat(hours))
 
     def trigger(self):
@@ -243,7 +256,9 @@ class IndiaSweep:
         while True:
             if self.trigger():
                 await asyncio.shield(self.run)
-            await asyncio.sleep(hours * 3600)
+                await asyncio.sleep(hours * 3600)
+            else:
+                await asyncio.sleep(60)
 
     async def execute(self):
         try:

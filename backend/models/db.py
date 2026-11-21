@@ -495,6 +495,13 @@ class IndiaWorkflowDraft(AccountScoped, Base):
     approval = Column(String(64), nullable=True)
 
 
+class IndiaHiringDetails(AccountScoped, Base):
+    __tablename__ = "india_hiring_details"
+
+    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    details = Column(JSON, nullable=False)
+
+
 class Application(AccountScoped, Base):
     __tablename__ = "applications"
     __table_args__ = (Index("ix_applications_acct_status_updated", "account_id", "status", text("updated_at DESC")),)   # QA F9 / T6-01

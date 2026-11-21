@@ -297,6 +297,32 @@ _EMPTY_RESUME = {"header": {"name": "", "contact_items": []}, "summary": "", "ex
                  "skills": {}, "education": [], "projects": [], "publications": []}
 
 
+def _display_experience(experience, group_employers):
+    """Annotate consecutive employer roles for export without changing stored facts."""
+    if not group_employers or not isinstance(experience, list):
+        return experience
+    from itertools import groupby
+
+    def employer(entry):
+        if not isinstance(entry, dict):
+            return ""
+        return " ".join(_as_text(entry.get("company")).split()).casefold()
+
+    rows = []
+    for company, entries in groupby(experience, key=employer):
+        roles = list(entries)
+        if not company or len(roles) == 1:
+            rows.extend(roles)
+            continue
+        for index, role in enumerate(roles):
+            rows.append({
+                **role,
+                "grouped_role": True,
+                "employer_heading": roles[0]["company"] if index == 0 else "",
+            })
+    return rows
+
+
 def _render_html(json_data: dict, template_name: str, page_format: str) -> str:
     """Render a resume to HTML using its Jinja2 template."""
     from jinja2 import Environment, FileSystemLoader
@@ -328,6 +354,9 @@ def _render_html(json_data: dict, template_name: str, page_format: str) -> str:
         content["header"] = dict(_EMPTY_RESUME["header"])
     content["header"] = {**_EMPTY_RESUME["header"], **content["header"]}
     content = _render_safe_links(content)
+    content["experience"] = _display_experience(
+        content["experience"], content.get("group_experience") is True
+    )
     html = template.render(
         **content,
         page_format=page_format,
@@ -1638,6 +1667,7 @@ def _build_docx(json_data: dict, fmt: str, footer_text: str = "") -> bytes:
         runs(paragraph, left, bold=True)
         if right:
             paragraph.add_run("\t" + str(right))
+        return paragraph
 
     def details(item):
         if item.get("description"):
@@ -1668,8 +1698,12 @@ def _build_docx(json_data: dict, fmt: str, footer_text: str = "") -> bytes:
         runs(doc.add_paragraph(), data["summary"])
     if items("experience"):
         doc.add_heading("Experience", level=2)
-        for job in items("experience"):
-            row(f"{job.get('title') or ''}{' at ' + str(job['company']) if job.get('company') else ''}",
+        for job in _display_experience(items("experience"), data.get("group_experience") is True):
+            if job.get("employer_heading"):
+                heading = row(str(job["employer_heading"]))
+                heading.paragraph_format.keep_with_next = True
+            company = job.get("company") if not job.get("grouped_role") else None
+            row(f"{job.get('title') or ''}{' at ' + str(company) if company else ''}",
                 job.get("date") or job.get("dates") or "")
             if job.get("location"):
                 doc.add_paragraph(str(job["location"]))

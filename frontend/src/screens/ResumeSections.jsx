@@ -156,11 +156,11 @@ export function SectionShell({ name, count, open, onToggle, meta, children }) {
 
 // Renders the right section editor for a SECTION_ORDER name. Tailoring props are
 // optional — Persona passes none, so nothing renders as changed.
-export function SectionEditor({ name, data, setField, mutate, baseData, emptyNote, pageHint = true, onError, onRemoved }) {
+export function SectionEditor({ name, data, setField, mutate, baseData, emptyNote, pageHint = true, groupOption = false, onError, onRemoved }) {
   switch (name) {
     case 'Header': return <HeaderEditor data={data} setField={setField} mutate={mutate} onRemoved={onRemoved} />
     case 'Summary': return <SummaryEditor pageHint={pageHint} data={data} setField={setField} baseSummary={baseData?.summary} />
-    case 'Experience': return <ExperienceEditor emptyNote={emptyNote} data={data} setField={setField} mutate={mutate} baseExp={baseData?.experience} onRemoved={onRemoved} />
+    case 'Experience': return <ExperienceEditor emptyNote={emptyNote} data={data} setField={setField} mutate={mutate} baseExp={baseData?.experience} groupOption={groupOption} onRemoved={onRemoved} />
     case 'Skills': return <SkillsEditor emptyNote={emptyNote} data={data} mutate={mutate} baseSkills={baseData?.skills} onError={onError} onRemoved={onRemoved} />
     case 'Education': return <EducationEditor emptyNote={emptyNote} data={data} setField={setField} mutate={mutate} onRemoved={onRemoved} />
     case 'Projects': return <ProjectsEditor emptyNote={emptyNote} data={data} setField={setField} mutate={mutate} onRemoved={onRemoved} />
@@ -271,7 +271,7 @@ export function baseExperienceFor(base, role, index) {
   return undefined
 }
 
-export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, onRemoved }) {
+export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, groupOption, onRemoved }) {
   const exp = data.experience || []
   const undoRemove = useUndoRemove(mutate, onRemoved)
   const [open, setOpen] = useState(() => new Set([0]))   // first entry open by default
@@ -300,6 +300,10 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
   const toggle = (i) => setOpen((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, paddingTop: 10 }}>
+      {groupOption && <Switch on={data.group_experience === true}
+        onChange={(enabled) => setField('group_experience', enabled)}
+        label="Group consecutive roles at the same employer"
+        title="Show one employer heading in the preview and exports. Each role keeps its title, dates, and bullets." />}
       {exp.length > 1 && <Button size="sm" onClick={() => reorder(newestExperienceOrder(exp))}>Sort newest first</Button>}
       {exp.map((e, i) => {
         const ch = entryChanged(e, i), isOpen = open.has(i), nb = (e.bullets || []).length

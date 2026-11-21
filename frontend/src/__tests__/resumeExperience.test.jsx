@@ -40,3 +40,12 @@ it('sorts, moves and edits experience through the same save path', () => {
   fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '2011 – 2020' } })
   expect(saved).toHaveBeenLastCalledWith({ experience: [{ ...older, date: '2011 – 2020' }, newer] })
 })
+
+
+it('saves the employer grouping preference separately from the experience entries', () => {
+  const saved = vi.fn()
+  const data = { experience: [{ title: 'Director', company: 'Example' }] }
+  render(<ExperienceEditor groupOption data={data} {...makeMutators(data, saved)} />)
+  fireEvent.click(screen.getByRole('switch', { name: 'Group consecutive roles at the same employer' }))
+  expect(saved).toHaveBeenCalledWith({ ...data, group_experience: true })
+})

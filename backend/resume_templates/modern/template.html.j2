@@ -294,6 +294,14 @@ ul.bullets li {
     {% for job in experience %}
 
     <div class="entry">
+      {% if job.grouped_role %}
+      {% if job.employer_heading %}<div><strong>{{ job.employer_heading | e }}</strong></div>{% endif %}
+      <div class="entry-row">
+        <span><strong>{{ job.title | e }}</strong></span>
+        <span class="entry-date">{{ (job.date or job.dates) | e }}</span>
+      </div>
+      {% if job.location %}<div class="entry-location">{{ job.location | e }}</div>{% endif %}
+      {% else %}
 
       <div class="entry-row">
         <span class="entry-company">
@@ -317,6 +325,7 @@ ul.bullets li {
 
       </div>
 
+      {% endif %}
       {% if job.description %}
       <div class="entry-description">
         {{ job.description }}

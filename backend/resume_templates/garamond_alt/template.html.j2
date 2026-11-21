@@ -229,6 +229,14 @@ ul.bullets li::before {
     <div class="section-title">Experience</div>
     {% for job in experience %}
     <div class="entry">
+      {% if job.grouped_role %}
+      {% if job.employer_heading %}<div><strong>{{ job.employer_heading | e }}</strong></div>{% endif %}
+      <div class="entry-header">
+        <span><strong>{{ job.title | e }}</strong></span>
+        <span class="entry-date">{{ (job.date or job.dates) | e }}</span>
+      </div>
+      {% if job.location %}<div class="entry-location">{{ job.location | e }}</div>{% endif %}
+      {% else %}
       <div class="entry-header">
         <span class="entry-title">{{ job.title }}</span>
         <span class="entry-date">{{ job.dates }}</span>
@@ -237,6 +245,7 @@ ul.bullets li::before {
         <span class="entry-company">{{ job.company }}</span>
         <span class="entry-location">{{ job.location }}</span>
       </div>
+      {% endif %}
       {% if job.description %}
       <div class="entry-description">{{ job.description }}</div>
       {% endif %}

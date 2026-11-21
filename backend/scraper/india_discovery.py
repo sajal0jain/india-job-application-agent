@@ -25,7 +25,11 @@ SUPPORT = re.compile(r"\b(?:assistant to|executive assistant|account manager|"
 NCR = re.compile(r"\b(?:gurugram|gurgaon|delhi(?:[ -]?ncr)?|new delhi|"
                  r"(?:greater )?noida|ghaziabad|faridabad)\b", re.I)
 INDIA = re.compile(r"\bindia\b", re.I)
-REMOTE = re.compile(r"\b(?:remote|work from home)\b", re.I)
+REMOTE = re.compile(r"\b(?:remote|work from home|work from anywhere)\b", re.I)
+WORLDWIDE = re.compile(r"\b(?:worldwide|anywhere in the world|globally|global|work from anywhere)\b", re.I)
+REMOTE_RESTRICTION = re.compile(
+    r"\b(?:only|except|excluding|restricted to|limited to|must be based|must reside)\b", re.I
+)
 EXCLUDED_INDIA = re.compile(r"\b(?:except|excluding|outside|not based in)\s+india\b", re.I)
 
 
@@ -55,13 +59,18 @@ def location_match(posting):
     # office must not turn another location into an India-wide remote posting.
     entries = [part.strip() for place in places for part in re.split(r"[;/|]", place)]
     if arrangement not in {"hybrid", "onsite", "on-site", "on site"}:
+        excludes_india = any(EXCLUDED_INDIA.search(entry) for entry in entries)
         for entry in entries:
-            if EXCLUDED_INDIA.search(entry):
+            if excludes_india:
                 continue
             if (INDIA.search(entry) or NCR.search(entry)) and (
                 arrangement == "remote" or REMOTE.search(entry)
             ):
                 return "match", "Remote with an India location", ", ".join(places)
+        if (not excludes_india and not any(REMOTE_RESTRICTION.search(entry) for entry in entries)
+                and any(WORLDWIDE.search(entry) and (arrangement == "remote" or REMOTE.search(entry))
+                        for entry in entries)):
+            return "match", "Worldwide remote with no location restriction listed", ", ".join(places)
     if arrangement != "remote" and any(NCR.search(entry) for entry in entries):
         return "match", "Delhi NCR location", ", ".join(places)
     if arrangement == "remote" or any(REMOTE.search(entry) for entry in entries):

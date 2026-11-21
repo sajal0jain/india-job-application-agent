@@ -49,7 +49,7 @@ export default function IndiaDiscovery() {
     <Card>
       <Heading strong>India leadership discovery</Heading>
       <ScheduledDiscovery />
-      <p>Preview Delhi NCR and Remote India roles on up to three employer boards that permit automated access. Use Greenhouse, Lever, or Ashby board homepages.</p>
+      <p>Preview Gurugram, Delhi NCR, Remote India, and worldwide remote roles on up to three employer boards that permit automated access. Use Greenhouse, Lever, or Ashby board homepages.</p>
       <form onSubmit={search} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {boards.map((url, index) => (
           <Input key={index} type="url" ariaLabel={`Employer board ${index + 1}`}

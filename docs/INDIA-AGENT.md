@@ -80,7 +80,9 @@ Choose **All levels**, **Director and Head**, or **Manager and Senior Manager**,
 then click **Preview jobs**. The search covers AI, machine learning, analytics,
 data science, decision science, business intelligence, and related insights roles.
 The match reasons come from the title and the location metadata supplied by the
-employer feed. A city or country restriction in the actual posting can be more
+employer feed. Gurugram and Gurgaon refer to the same target city. International
+remote roles qualify when the feed explicitly lists India or worldwide remote
+work with no location restriction. General remote listings need review. A city or country restriction in the actual posting can be more
 specific. Open the employer's posting and confirm eligibility before saving a job,
 especially when the preview flags it for review.
 

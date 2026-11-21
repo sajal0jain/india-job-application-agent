@@ -94,3 +94,42 @@ async def test_board_failure_isolated_from_portal_pagination(monkeypatch):
     result = await discovery.sweep()
     assert result[0]["error"] and result[1]["source"] == "Jooble"
     assert result[1]["added"] == 1 and portal.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_remotive_feed_and_repeat_limit(test_db, monkeypatch):
+    from backend.scraper.sources import remotive
+
+    monkeypatch.setattr(remotive, "SessionLocal", lambda: nullcontext(test_db))
+    monkeypatch.setattr(discovery, "SessionLocal", lambda: nullcontext(test_db))
+    assert remotive.reserve_request()
+    assert not remotive.reserve_request()
+
+    regions = ["India", "Worldwide", "United States only", "Worldwide except India", "APAC"]
+    jobs = [
+        {"title": "Director of Analytics", "company_name": "Example",
+         "candidate_required_location": region, "url": f"https://remotive.com/remote-jobs/data/example-{i}"}
+        for i, region in enumerate(regions)
+    ]
+    jobs.append({**jobs[0], "url": "https://other.invalid/remote-jobs/data/example"})
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={"jobs": jobs}))
+    async with httpx.AsyncClient(transport=transport) as client:
+        rows = await remotive.postings(client)
+
+    counts = discovery.import_candidates(rows, "india_remotive")
+    assert counts == {"matches": 2, "review": 1, "added": 3, "duplicate": 0}
+    assert {row.url for row in test_db.query(Job)} == {jobs[i]["url"] for i in (0, 1, 4)}
+
+
+@pytest.mark.asyncio
+async def test_remotive_runs_without_portal_keys(monkeypatch):
+    monkeypatch.setenv("JN_INDIA_REMOTIVE", "1")
+    monkeypatch.setattr(discovery, "employer_boards", lambda: [])
+    monkeypatch.setattr(discovery, "portal_credentials", lambda: {})
+    monkeypatch.setattr(discovery.remotive, "reserve_request", lambda: True)
+    monkeypatch.setattr(discovery.remotive, "postings", AsyncMock(return_value=[]))
+    monkeypatch.setattr(discovery, "import_candidates", lambda *args: {"added": 0})
+    scheduler = discovery.IndiaSweep()
+    assert scheduler.configured()
+    assert scheduler.status()["portals"] == ["Remotive"]
+    assert await discovery.sweep() == [{"source": "Remotive", "received": 0, "added": 0}]

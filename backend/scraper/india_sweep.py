@@ -15,6 +15,7 @@ from backend.analyzer.work_arrangement import apply_arrangement_to_job
 from backend.models.db import Job, SessionLocal
 from backend.scraper._shared.dedup import make_content_hash, make_external_id
 from backend.scraper.ats import workday
+from backend.scraper.sources import remotive
 from backend.scraper.india_discovery import board_source, location_match, role_level
 from sqlalchemy.exc import IntegrityError
 
@@ -47,6 +48,10 @@ def employer_boards():
         url.strip().rstrip("/") for url in os.getenv("JN_INDIA_EMPLOYER_BOARDS", "").split(",")
         if url.strip()
     ))
+
+
+def remotive_enabled():
+    return os.getenv("JN_INDIA_REMOTIVE", "").strip() == "1"
 
 
 def portal_credentials():
@@ -173,6 +178,18 @@ async def sweep():
 
     pages = portal_pages()
     async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+        if remotive_enabled():
+            entry = {"source": "Remotive"}
+            report.append(entry)
+            try:
+                if remotive.reserve_request():
+                    rows = await remotive.postings(client)
+                    entry.update(received=len(rows), **import_candidates(rows, "india_remotive"))
+                else:
+                    entry["note"] = "The feed refreshes at most once every six hours."
+            except Exception as error:
+                logger.warning("Remotive sweep failed (%s)", type(error).__name__)
+                entry["error"] = "The public remote jobs feed could not be loaded."
         for source, keys in portal_credentials().items():
             if not all(keys):
                 continue
@@ -207,7 +224,7 @@ class IndiaSweep:
         self.last = None
 
     def configured(self):
-        return bool(employer_boards() or any(all(keys) for keys in portal_credentials().values()))
+        return bool(employer_boards() or remotive_enabled() or any(all(keys) for keys in portal_credentials().values()))
 
     def start(self):
         hours = schedule_hours()
@@ -245,8 +262,11 @@ class IndiaSweep:
         self.scheduler = self.run = None
 
     def status(self):
+        portals = [PORTAL_LABELS[source] for source, keys in portal_credentials().items() if all(keys)]
+        if remotive_enabled():
+            portals.append("Remotive")
         return {"enabled_hours": schedule_hours(), "boards": len(employer_boards()),
-                "portals": [PORTAL_LABELS[source] for source, keys in portal_credentials().items() if all(keys)],
+                "portals": portals,
                 "running": bool(self.run and not self.run.done()), "last": self.last}
 
 

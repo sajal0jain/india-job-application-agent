@@ -141,6 +141,7 @@ function ScheduledDiscovery() {
             {source.source} · {source.added || 0} added · {source.review || 0} need location review
             {!!source.capped_queries && ` · ${source.capped_queries} queries reached the page limit`}
             {source.error && ` · ${source.error}`}
+            {source.note && ` · ${source.note}`}
           </li>)}</ul>
         </>
       )}

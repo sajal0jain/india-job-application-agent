@@ -209,3 +209,16 @@ docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up 
 
 Set `JN_INDIA_SWEEP_HOURS=0` and recreate the backend to turn off recurring
 runs. The manual configured-source button remains available.
+
+### Remote-only job feed
+
+Set `JN_INDIA_REMOTIVE=1` in your local `.env` to add
+[Remotive](https://remotive.com/remote-jobs/api) to the same sweep, without an
+API key. Set `JN_INDIA_SWEEP_HOURS=24` for daily automation, or leave it at
+`0` to trigger the feed manually. Recreate the backend to apply the changes.
+
+The feed keeps matching leadership roles with explicit India or worldwide
+eligibility. It flags unclear geography for review and skips recognizable
+foreign-only restrictions. Listings retain their original Remotive links and
+source labels. The feed is refreshed at most once every six hours. Remotive
+delays public listings by 24 hours.

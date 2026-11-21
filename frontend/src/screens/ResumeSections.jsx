@@ -279,22 +279,34 @@ function EmployerLogo({ value, onChange }) {
   async function upload(file) {
     setError('')
     if (!file) return
-    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 32768) {
-      setError('Choose a PNG or JPEG image up to 32 KB.')
+    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setError('Choose a PNG or JPEG image up to 5 MB.')
       return
     }
     try {
       const image = await createImageBitmap(file)
-      const fits = Math.max(image.width, image.height) <= 600
-      image.close()
-      if (!fits) {
-        setError('Use an image no larger than 600 × 600 pixels.')
-        return
+      try {
+        const canvas = document.createElement('canvas')
+        const scale = Math.min(1, 240 / image.width, 120 / image.height)
+        canvas.width = Math.max(1, Math.round(image.width * scale))
+        canvas.height = Math.max(1, Math.round(image.height * scale))
+        const context = canvas.getContext('2d')
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        let logo = canvas.toDataURL('image/png')
+        if (logo.length > 43700) {
+          context.globalCompositeOperation = 'destination-over'
+          context.fillStyle = '#fff'
+          context.fillRect(0, 0, canvas.width, canvas.height)
+          logo = canvas.toDataURL('image/jpeg', 0.8)
+        }
+        if (logo.length > 43700) {
+          setError('Could not compress this logo. Try a smaller image.')
+          return
+        }
+        live.current(logo)
+      } finally {
+        image.close()
       }
-      const reader = new FileReader()
-      reader.addEventListener('load', () => live.current(reader.result))
-      reader.addEventListener('error', () => setError('Could not read the image.'))
-      reader.readAsDataURL(file)
     } catch {
       setError('Could not read the image.')
     }
@@ -310,7 +322,14 @@ function EmployerLogo({ value, onChange }) {
             upload(file)
           }} />
       </label>
-      {value && <Button size="xs" onClick={() => onChange('')}>Remove logo</Button>}
+      {value && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) && (
+            <img src={value} alt="Uploaded employer logo" style={{ maxWidth: 56, maxHeight: 28, objectFit: 'contain' }} />
+          )}
+          <Button size="xs" onClick={() => onChange('')}>Remove logo</Button>
+        </span>
+      )}
       {error && <p role="status">{error}</p>}
     </div>
   )

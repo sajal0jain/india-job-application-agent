@@ -286,3 +286,18 @@ def test_single_blackrock_link_can_be_imported(test_db, monkeypatch):
     assert routes.alert_import(job)["duplicate"] == 1
     assert test_db.query(Job).one().url == url
     assert routes.alert_preview(routes.AlertText(text=f"Unrelated email links\n{url}"))["jobs"] == []
+
+
+def test_pasted_linkedin_url_with_trailing_query_marker(test_db, monkeypatch):
+    from contextlib import nullcontext
+    from backend.scraper import india_sweep
+
+    monkeypatch.setattr(india_sweep, "SessionLocal", lambda: nullcontext(test_db))
+    url = "https://www.linkedin.com/jobs/view/4490978801/?"
+    assert routes.alert_preview(routes.AlertText(text=url))["jobs"] == [
+        {"url": url, "title": "", "portal": "LinkedIn"},
+    ]
+    second = "https://www.naukri.com/job-listings-director-example-123"
+    assert [job["url"] for job in routes.alert_preview(routes.AlertText(text=f"{url}\n{second}"))["jobs"]] == [url, second]
+    job = routes.AlertJob(url=url, title="Director of Data Science", location="Gurugram")
+    assert routes.alert_import(job)["added"] == 1

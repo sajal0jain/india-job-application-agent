@@ -45,11 +45,15 @@ def employer_link(url):
 
 def extract_alert(text):
     direct = text.strip()
-    if employer_link(direct) and not portal(direct):
+    if employer_link(direct):
+        label = portal(direct)
+        if label:
+            return [{"url": direct, "title": "", "portal": label}]
         return [{"url": direct, "title": "", "portal": "Employer website", "direct_employer": True}]
     message = Parser(policy=policy.default).parsestr(text)
     body = message.get_body(preferencelist=("html", "plain"))
-    if message.keys() and body is not None:
+    if body is not None and any(name in message for name in
+                                ("From", "Subject", "MIME-Version", "Content-Type")):
         text = body.get_content()
         if not isinstance(text, str):
             return []

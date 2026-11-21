@@ -4,7 +4,7 @@
 // Real data is looser than the EMPTY skeleton (unknown keys, missing sections). Every mutation
 // goes through mutate(), which deep-clones and writes one path, so unknown keys survive.
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
-import { Band, Card, DashedAdd, Helper, Input, Label, MoveArrows, RemoveLink, RemoveX, SectionHead, Switch, Textarea } from '../ui'
+import { Band, Button, Card, DashedAdd, Helper, Input, Label, MoveArrows, RemoveLink, RemoveX, SectionHead, Switch, Textarea } from '../ui'
 
 // The résumé sections' add-line IS ui.jsx's DashedAdd (accent ink · 1px dashed
 // --dashadd-border · r6 · 11.5 · h28, `big` = 32/12/500) — re-exported under the
@@ -39,7 +39,17 @@ export function makeMutators(data, onData) {
   const mutate = (fn) => { const d = JSON.parse(JSON.stringify(data || EMPTY)); fn(d); onData(d) }
   const setField = (path, val) => {
     const keys = String(path).split('.'); if (keys.some((k) => DANGEROUS.has(k))) return
-    mutate((d) => { let o = d; for (let i = 0; i < keys.length - 1; i++) { if (o == null || typeof o !== 'object') return; o = o[keys[i]] } if (o && typeof o === 'object') o[keys[keys.length - 1]] = val })
+    mutate((d) => {
+      let target = d
+      for (const [index, key] of keys.slice(0, -1).entries()) {
+        const array = /^\d+$/.test(keys[index + 1])
+        if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key]) !== array) {
+          target[key] = array ? [] : {}
+        }
+        target = target[key]
+      }
+      target[keys.at(-1)] = val
+    })
   }
   return { mutate, setField }
 }
@@ -59,8 +69,8 @@ export function Field({ label, value, onChange, placeholder, multiline, rows, fl
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: flex || undefined, minWidth: 0 }}>
       {label && <Helper size="xs">{label}</Helper>}
       {multiline
-        ? <Textarea value={value || ''} onChange={onChange} onKeyDown={boldKey} placeholder={placeholder} rows={rows || 3} />
-        : <Input value={value || ''} onChange={onChange} placeholder={placeholder} />}
+        ? <Textarea ariaLabel={label} value={value || ''} onChange={onChange} onKeyDown={boldKey} placeholder={placeholder} rows={rows || 3} />
+        : <Input ariaLabel={label} value={value || ''} onChange={onChange} placeholder={placeholder} />}
     </label>
   )
 }
@@ -218,15 +228,70 @@ export function HeaderEditor({ data, setField, mutate, onRemoved }) {
     </div>
   )
 }
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+function monthOf(value) {
+  const text = value.trim().toLowerCase()
+  let match = text.match(/^(\d{4})(?:[-/](0?[1-9]|1[0-2]))?$/)
+  if (match) return Number(match[1]) * 12 + Number(match[2] || 1)
+  match = text.match(/^(0?[1-9]|1[0-2])[-/](\d{4})$/)
+  if (match) return Number(match[2]) * 12 + Number(match[1])
+  match = text.match(/^([a-z]+)\.?[\s,]+(\d{4})$/)
+  const month = match ? MONTHS.indexOf(match[1].slice(0, 3)) : -1
+  return month === -1 ? null : Number(match[2]) * 12 + month + 1
+}
+
+function employmentDates(value) {
+  const text = String(value || '').trim()
+  const range = text.split(/\s*(?:[–—]|\bto\b|(?<=\d{4})-(?=\d{4}\b|[a-z]))\s*|\s+-\s+/i)
+  const start = monthOf(range[0])
+  const last = range.at(-1)
+  const end = /^(?:present|current|ongoing|now)$/i.test(last) ? Infinity : monthOf(last)
+  return start === null || end === null || end < start ? null : { start, end }
+}
+
+export function newestExperienceOrder(experience) {
+  return experience.map((entry, index) => ({ index, dates: employmentDates(entry.date) }))
+    .sort((a, b) => {
+      if (!a.dates || !b.dates) return Number(!a.dates) - Number(!b.dates)
+      if (a.dates.end !== b.dates.end) return a.dates.end > b.dates.end ? -1 : 1
+      return b.dates.start - a.dates.start
+    })
+    .map(({ index }) => index)
+}
+
+export function baseExperienceFor(base, role, index) {
+  if (!base?.length) return undefined
+  const sameRole = (candidate) => candidate.company === role.company && candidate.title === role.title
+  const matches = base.filter(sameRole)
+  const sameDates = matches.filter((entry) => entry.date === role.date)
+  if (sameDates.length === 1) return sameDates[0]
+  if (matches.length === 1) return matches[0]
+  if (sameDates.includes(base[index])) return base[index]
+  return undefined
+}
+
 export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, onRemoved }) {
   const exp = data.experience || []
   const undoRemove = useUndoRemove(mutate, onRemoved)
   const [open, setOpen] = useState(() => new Set([0]))   // first entry open by default
+  const reorder = (order) => {
+    if (order.every((oldIndex, newIndex) => oldIndex === newIndex)) return
+    mutate((d) => { d.experience = order.map((index) => d.experience[index]) })
+    setOpen((previous) => new Set(order.flatMap((oldIndex, newIndex) => previous.has(oldIndex) ? [newIndex] : [])))
+  }
+  const move = (index, direction) => {
+    const adjacent = index + direction
+    if (adjacent < 0 || adjacent >= exp.length) return
+    const order = exp.map((_, i) => i)
+    order.splice(adjacent, 0, order.splice(index, 1)[0])
+    reorder(order)
+  }
   const setBullet = (i, bi, v) => mutate((d) => { d.experience[i].bullets[bi] = v })
   const addBullet = (i) => mutate((d) => { d.experience[i].bullets = d.experience[i].bullets || []; d.experience[i].bullets.push('') })
   const bulletMark = (i, bi, txt) => {
     if (!baseExp) return null
-    const bb = baseExp[i]?.bullets || []
+    const bb = baseExperienceFor(baseExp, exp[i], i)?.bullets || []
     if (bi >= bb.length) return { kind: 'added', label: 'Added by tailoring' }
     if (bb[bi] !== txt) return { kind: 'changed', label: 'Changed by tailoring', base: bb[bi] }
     return null
@@ -235,6 +300,7 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
   const toggle = (i) => setOpen((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, paddingTop: 10 }}>
+      {exp.length > 1 && <Button size="sm" onClick={() => reorder(newestExperienceOrder(exp))}>Sort newest first</Button>}
       {exp.map((e, i) => {
         const ch = entryChanged(e, i), isOpen = open.has(i), nb = (e.bullets || []).length
         return (
@@ -254,6 +320,13 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
             </SectionHead>
             {isOpen && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '2px 11px 11px', borderTop: '1px solid var(--line-soft)' }}>
+                {exp.length > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8 }}>
+                    <MoveArrows onUp={() => move(i, -1)} onDown={() => move(i, 1)}
+                      upOff={i === 0} downOff={i === exp.length - 1} />
+                    <Helper>Move role</Helper>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, paddingTop: 9 }}>
                   <Field label="Company" value={e.company} onChange={(v) => setField(`experience.${i}.company`, v)} />
                   <Field label="Title" value={e.title} onChange={(v) => setField(`experience.${i}.title`, v)} />
@@ -271,7 +344,10 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
                       {m?.kind === 'changed' && <span onClick={() => setBullet(i, bi, m.base)} title="Decline this tailoring change — restores the base text" style={{ flex: '0 0 auto', fontSize: 11, color: 'var(--warn)', cursor: 'pointer', fontWeight: 500, lineHeight: '19px' }}>↩</span>}
                       <RemoveX size={10} lh="19px" onClick={() => undoRemove('Removed bullet',
                         (d) => d.experience[i].bullets.splice(bi, 1),
-                        (d) => { d.experience[i].bullets = d.experience[i].bullets || []; d.experience[i].bullets.splice(bi, 0, b) })} />
+                        (d) => {
+                          const role = baseExperienceFor(d.experience, e, i)
+                          if (role) (role.bullets ||= []).splice(bi, 0, b)
+                        })} />
                     </div>
                   )
                 })}
@@ -279,7 +355,7 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
                 {(e.suggested_bullets || []).map((sb, k) => (
                   <div key={`sb${k}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', border: '1px solid var(--change-soft)', background: 'var(--change-bg)', boxShadow: 'var(--change-edge)', borderRadius: 'var(--radius-field)' }}>
                     <span title="Suggested by tailoring. Kept unless you decline it in Review." style={{ flex: '0 0 auto', color: 'var(--ai)', fontSize: 11, lineHeight: '19px' }}>✦</span>
-                    <span style={{ flex: 1, fontSize: 12.5, lineHeight: '19px', color: 'var(--text-2)' }}>{sb}</span>
+                    <BulletText value={sb} onChange={(value) => setField(`experience.${i}.suggested_bullets.${k}`, value)} />
                     {/* ui: keep — the row's markers and this tag ride the 19px prose line of BulletText; Helper's 16px would unalign them */}
                     <span style={{ flex: '0 0 auto', fontSize: 9.5, color: 'var(--muted)', lineHeight: '19px' }}>suggested</span>
                   </div>
@@ -294,7 +370,10 @@ export function ExperienceEditor({ emptyNote, data, setField, mutate, baseExp, o
         )
       })}
       {exp.length === 0 && <EmptyState note={emptyNote} what="experience" />}
-      <DashedAdd big onClick={() => mutate((d) => { d.experience = d.experience || []; d.experience.push({ company: '', title: '', location: '', date: '', description: '', bullets: [] }) })}>+ Add experience</DashedAdd>
+      <DashedAdd big onClick={() => {
+        mutate((d) => { d.experience = d.experience || []; d.experience.push({ company: '', title: '', location: '', date: '', description: '', bullets: [] }) })
+        setOpen((previous) => new Set([...previous, exp.length]))
+      }}>+ Add experience</DashedAdd>
     </div>
   )
 }

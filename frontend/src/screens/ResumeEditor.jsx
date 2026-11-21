@@ -14,7 +14,7 @@ import { loadDemo } from '../demoHooks'
 // The résumé-content editors are shared with /persona (a Persona's
 // resume_content is the same shape as a Resume's json_data).
 import {
-  EMPTY, resumeSectionNames, sectionCounts, makeMutators,
+  EMPTY, resumeSectionNames, sectionCounts, makeMutators, baseExperienceFor,
   SectionShell, SectionEditor, BandRule,
 } from './ResumeSections'
 import ResumeName from './ResumeName'
@@ -44,7 +44,7 @@ function computeChanges(base, copy) {
   const sd = wordDiff(base.summary, copy.summary)
   if (sd) out.push({ key: 'summary', where: 'Summary', kind: 'modified', path: 'summary', baseText: base.summary || '', ...sd })
   ;(copy.experience || []).forEach((ce, i) => {
-    const be = (base.experience || [])[i] || {}
+    const be = baseExperienceFor(base.experience, ce, i) || {}
     const bb = be.bullets || [], cb = ce.bullets || []
     cb.forEach((txt, j) => {
       if (j < bb.length) { const d = wordDiff(bb[j], txt); if (d) out.push({ key: `exp${i}b${j}`, where: `Experience · ${ce.company || 'role'} · bullet ${j + 1}`, kind: 'modified', path: `experience.${i}.bullets.${j}`, baseText: bb[j], ...d }) }

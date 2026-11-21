@@ -222,3 +222,21 @@ eligibility. It flags unclear geography for review and skips recognizable
 foreign-only restrictions. Listings retain their original Remotive links and
 source labels. The feed is refreshed at most once every six hours. Remotive
 delays public listings by 24 hours.
+
+## Job alerts and CV ranking
+
+**Searches → Import job alerts** accepts pasted alert content or an email
+saved as `.eml`. Preview the recognized LinkedIn, Naukri, Foundit, and
+Instahyre direct posting links, correct their titles, add employer and
+location, and optionally paste the posting text. Import each relevant job
+for review. The preview works on the submitted file or text and does not
+follow links or connect to a mailbox. For wrapped links, paste the direct
+posting URL after opening it yourself.
+
+**Application queue → CV-ranked jobs** computes a local ranking on opening
+or refreshing the page. It covers the latest 200 new or saved jobs and uses
+the current verified CV facts. Short descriptions are flagged as
+insufficient posting text. Where a feed includes posting excerpts, new
+imports retain them. If a job has no description, open it and paste the
+employer's posting text to generate and review a draft. Ranking does not
+approve applications or generate PDFs automatically.

@@ -14,6 +14,7 @@ from backend.analyzer.location import apply_location_to_job
 from backend.analyzer.work_arrangement import apply_arrangement_to_job
 from backend.models.db import Job, SessionLocal
 from backend.scraper._shared.dedup import make_content_hash, make_external_id
+from backend.scraper._shared.html_text import html_to_text
 from backend.scraper.ats import workday
 from backend.scraper.sources import remotive
 from backend.scraper.india_discovery import board_source, location_match, role_level
@@ -92,7 +93,7 @@ async def portal_page(client, source, keys, query, area, page):
         data = response.json()
         return [
             {"title": row.get("title"), "company": (row.get("company") or {}).get("display_name"),
-             "url": row.get("redirect_url"), "location": (row.get("location") or {}).get("display_name")}
+             "description": html_to_text(row.get("description") or ""), "url": row.get("redirect_url"), "location": (row.get("location") or {}).get("display_name")}
             for row in data["results"]
         ]
     response = await client.post(f"https://in.jooble.org/api/{quote(keys[0], safe='')}", json={
@@ -101,7 +102,7 @@ async def portal_page(client, source, keys, query, area, page):
     response.raise_for_status()
     return [
         {"title": row.get("title"), "company": row.get("company"), "url": row.get("link"),
-         "location": row.get("location")}
+         "location": row.get("location"), "description": html_to_text(row.get("snippet") or "")}
         for row in response.json()["jobs"]
     ]
 
@@ -136,6 +137,7 @@ def import_candidates(postings, source):
                 continue
             job = Job(external_id=external_id, content_hash=make_content_hash(company, title),
                       title=title[:350], company=company, location=location[:500] or None, url=url,
+                      description=(posting.get("description") or "")[:16000] or None,
                       source=source if decision == "match" else f"{source}_review",
                       status="new", seen=False, saved=False)
             apply_arrangement_to_job(job, structured=posting.get("arrangement"))

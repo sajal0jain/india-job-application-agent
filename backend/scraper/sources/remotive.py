@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from backend.accounts.settings import get_install_setting, put_setting
 from backend.models.db import SessionLocal, utcnow
+from backend.scraper._shared.html_text import html_to_text
 from backend.scraper.india_discovery import EXCLUDED_INDIA, INDIA, WORLDWIDE
 
 API = "https://remotive.com/api/remote-jobs"
@@ -52,5 +53,5 @@ async def postings(client):
         if not (INDIA.search(location) or WORLDWIDE.search(location)) and OTHER_REGIONS.search(location):
             continue
         result.append({"title": row.get("title"), "company": row.get("company_name"),
-                       "url": url, "location": location, "arrangement": "remote"})
+                       "url": url, "location": location, "description": html_to_text(row.get("description") or ""), "arrangement": "remote"})
     return result

@@ -100,6 +100,7 @@ export default function ApplicationQueue() {
       </Card>
       {jobId && ready && <JobReview key={jobId} jobId={jobId} facts={facts} busy={busy || (profileDirty ? 'profile edits' : '')}
         run={run} refreshQueue={refreshQueue} />}
+      <RankedJobs facts={facts} />
       <Card>
         <Heading strong>Drafts</Heading>
         {queue.length === 0 && <p>Generate a draft from a saved job.</p>}
@@ -258,6 +259,55 @@ function JobReview({ jobId, facts, busy, run, refreshQueue }) {
             </>
           )}
         </>
+      )}
+    </Card>
+  )
+}
+
+
+function RankedJobs({ facts }) {
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const names = new Map(facts.map(({ id, text }) => [id, text]))
+
+  async function refresh() {
+    setBusy(true)
+    setError('')
+    try {
+      const { data } = await api.get(`${PATH}/shortlist`)
+      setResult(data)
+    } catch {
+      setError('Could not load ranked jobs.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  return (
+    <Card>
+      <Heading strong>CV-ranked jobs</Heading>
+      <p>Latest 200 new or saved jobs, ranked locally by verified CV evidence.</p>
+      <Button disabled={busy} onClick={refresh}>Refresh ranking</Button>
+      {error && <p role="status">{error}</p>}
+      {result && !result.ready && <p>Save verified CV facts, then refresh the ranking.</p>}
+      {result?.ready && (
+        <ol>{result.jobs.map((job) => (
+          <li key={job.job_id} style={{ marginBlock: 8 }}>
+            <RouterLink to={`/application-queue/${job.job_id}`}>{job.title}</RouterLink>
+            {' · '}{job.company} · {job.score === null ? 'Insufficient posting text' : `${job.score}/100`}
+            {job.evidence.length > 0 && (
+              <details>
+                <summary>Matching evidence</summary>
+                <ul>{job.evidence.map(({ requirement, fact_id: id }) => (
+                  <li key={requirement}>{requirement} · {names.get(id) || 'No verified evidence found'}</li>
+                ))}</ul>
+              </details>
+            )}
+          </li>
+        ))}</ol>
       )}
     </Card>
   )

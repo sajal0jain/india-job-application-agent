@@ -163,3 +163,50 @@ async def test_ollama_only_receives_posting_and_keeps_unverified_answers_blank(c
     with pytest.raises(HTTPException, match="verified screening fact"):
         routes.edit_draft(job_id, invalid, test_db)
     assert routes.read_job(job_id, test_db)["draft"]["answers"] == []
+
+
+def test_alert_preview_and_import_uses_only_direct_portal_links(test_db, monkeypatch):
+    from contextlib import nullcontext
+    from backend.scraper import india_sweep
+
+    monkeypatch.setattr(india_sweep, "SessionLocal", lambda: nullcontext(test_db))
+    text = """Subject: Your job alert
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<a href="https://www.linkedin.com/comm/jobs/view/123">Director of Analytics</a>
+<a href="https://www.naukri.com/job-listings-director-456">Director of AI</a>
+<a href="https://www.linkedin.com.evil.invalid/jobs/view/123">Untrusted</a>
+<a href="https://www.linkedin.com/jobs/search">Search</a>"""
+    jobs = routes.alert_preview(routes.AlertText(text=text))["jobs"]
+    assert [(job["portal"], job["title"]) for job in jobs] == [
+        ("LinkedIn", "Director of Analytics"), ("Naukri", "Director of AI"),
+    ]
+    payload = routes.AlertJob(url=jobs[0]["url"], title=jobs[0]["title"], location="Gurgaon")
+    assert routes.alert_import(payload)["added"] == 1
+    assert routes.alert_import(payload)["duplicate"] == 1
+    assert test_db.query(Job).count() == 1
+    with pytest.raises(HTTPException, match="direct job link"):
+        routes.alert_import(routes.AlertJob(url="https://evil.invalid/jobs/view/123", title=payload.title))
+
+
+def test_shortlist_ranks_verified_evidence_and_flags_thin_text(candidate, test_db):
+    job_id, _, _ = candidate
+    eligible = test_db.query(Job).filter_by(id=job_id).one()
+    eligible.status = "new"
+    eligible.description = (
+        "Lead analytics teams. Build forecasting systems. Deploy Python pipelines. "
+        "Support teams working across several departments and lead product planning. "
+        "Applicants should bring experience managing production projects and collaborating "
+        "with business teams to improve operational reporting."
+    )
+    thin = Job(title="Director of Data Science", company="Other", location="Gurgaon", status="new",
+               description="Analytics and data science", url="https://jobs.lever.co/other/id",
+               external_id="shortlist-test-thin")
+    test_db.add(thin)
+    test_db.commit()
+    scores = routes.shortlist(test_db)
+    assert scores["ready"]
+    assert scores["jobs"][0]["job_id"] == str(job_id)
+    assert scores["jobs"][0]["score"] > 40
+    assert scores["jobs"][1]["score"] is None

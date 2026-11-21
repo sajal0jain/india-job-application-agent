@@ -96,6 +96,7 @@ const SOURCE_LABELS = {
   india_employer: 'India employer board', india_employer_review: 'India employer board · review location',
   india_adzuna: 'Adzuna', india_adzuna_review: 'Adzuna · review location',
   india_jooble: 'Jooble', india_jooble_review: 'Jooble · review location',
+  india_alert: 'Job alert', india_alert_review: 'Job alert · review location',
   india_remotive: 'Remotive', india_remotive_review: 'Remotive · review location',
   direct: 'Direct', extension: 'Extension', jobspy_linkedin: 'LinkedIn', jobspy_indeed: 'Indeed',
   jobspy_zip_recruiter: 'ZipRecruiter', jobspy_google: 'Google', levels_fyi: 'Levels', linkedin_personal: 'LinkedIn Personal',

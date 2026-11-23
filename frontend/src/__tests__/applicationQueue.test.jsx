@@ -61,3 +61,21 @@ it('loads a posting, prepares a draft after review, and opens the matching job',
   await screen.findByText('Director of AI · Sample')
   expect(api.post).toHaveBeenLastCalledWith(`${prefix}/posting/prepare`, posting)
 })
+
+it('imports Word facts for review and keeps existing contact facts', async () => {
+  const existing = { section: 'Email', text: 'current@example.invalid', source: 'Verified' }
+  const imported = { section: 'Experience', text: 'Led the analytics team.', source: 'sample.docx · entry 2' }
+  api.get.mockImplementation(async (path) => ({ data: ({
+    '/india-workflow/profile': { facts: [existing] }, '/india-workflow/queue': [], '/jobs': { jobs: [] },
+  })[path] }))
+  api.post.mockResolvedValue({ data: { facts: [{ ...existing, text: 'old@example.invalid' }, imported, imported] } })
+  render(<MemoryRouter><ApplicationQueue /></MemoryRouter>)
+  fireEvent.click(await screen.findByText('1 facts'))
+  fireEvent.change(screen.getByLabelText(/Import facts from a Word CV/), {
+    target: { files: [new File(['sample'], 'sample.docx')] },
+  })
+  expect((await screen.findByLabelText('Claim 2')).value).toBe(imported.text)
+  expect(screen.getByLabelText('Claim 1').value).toBe(existing.text)
+  expect(screen.queryByLabelText('Claim 3')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Save verified facts' }).getAttribute('aria-disabled')).toBe('true')
+})

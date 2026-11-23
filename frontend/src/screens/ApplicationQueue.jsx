@@ -61,6 +61,29 @@ export default function ApplicationQueue() {
     setConfirmFacts(false)
   }
 
+  async function importCv(file) {
+    if (!file) return
+    const body = new FormData()
+    body.append('file', file)
+    const { data } = await api.post(`${PATH}/profile/import-preview`, body)
+    const normalize = (text) => text.trim().toLowerCase().replace(/\s+/g, ' ')
+    const key = ({ section, text }) => CONTACT.includes(section) ? section : `${section}:${normalize(text)}`
+    const seen = new Set(facts.filter(({ text }) => text.trim()).map(key))
+    const next = [...facts]
+    let skipped = data.omitted || 0
+    for (const fact of data.facts) {
+      if (seen.has(key(fact)) || next.length >= 80) {
+        skipped += 1
+        continue
+      }
+      seen.add(key(fact))
+      next.push(fact)
+    }
+    const added = next.length - facts.length
+    if (added) updateFacts(next)
+    setMessage(`${added} CV facts added for review. ${skipped ? `${skipped} rows skipped (duplicates, existing contact fields, or limits). ` : ''}Review the rows before saving.`)
+  }
+
   return (
     <main className="v2-scroll" style={{ overflow: 'auto', padding: 24, flex: 1, display: 'grid', gap: 12, alignContent: 'start' }}>
       <PageTitle>Application queue</PageTitle>
@@ -71,6 +94,14 @@ export default function ApplicationQueue() {
         <Heading strong>Verified master CV facts</Heading>
         <details>
           <summary>{facts.length} facts</summary>
+          <p><label>Import facts from a Word CV (.docx){' '}
+            <input type="file" accept=".docx" disabled={!ready || !!busy} onChange={(event) => {
+              const file = event.currentTarget.files[0]
+              event.currentTarget.value = ''
+              if (file) run('import-cv', () => importCv(file))
+            }} />
+          </label></p>
+          <p>The import runs locally. Review the extracted wording, section, and source before saving.</p>
           <p>Add each claim as it should appear on your resume. For experience, include the employer, role and dates where relevant. Record a source excerpt or reference for every fact. Add contact details separately and use Screening for confirmed answers such as notice period or work authorization.</p>
           {facts.map((fact, index) => (
             <div key={index} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingBlock: 4 }}>

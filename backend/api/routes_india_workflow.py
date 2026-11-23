@@ -7,13 +7,14 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from backend.analyzer import llm_client
+from backend.analyzer.cv_fact_import import MAX_CV_BYTES, extract_cv_facts
 from backend.analyzer.india_workflow import (
     CONTACT, CV_SECTIONS, FACT_SECTIONS, application_target, evidence_match, fingerprint,
     requirements_from_posting, resume_html, validate_pdf,
@@ -137,6 +138,22 @@ def check_revision(draft, job, facts, expected=None, approved=False):
 def get_profile(db: Session = Depends(get_db)):
     row = profile(db)
     return {"facts": row.facts if row else []}
+
+
+@router.post("/profile/import-preview")
+def preview_cv_facts(file: UploadFile, response: Response):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".docx"):
+        raise HTTPException(422, "Choose a Word CV in .docx format.")
+    content = file.file.read(MAX_CV_BYTES + 1)
+    if len(content) > MAX_CV_BYTES:
+        raise HTTPException(413, "Choose a Word CV smaller than 5 MB.")
+    try:
+        result = extract_cv_facts(content, filename)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
+    response.headers["Cache-Control"] = "no-store"
+    return result
 
 
 @router.put("/profile")

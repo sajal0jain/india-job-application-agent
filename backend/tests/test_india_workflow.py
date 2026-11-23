@@ -346,3 +346,28 @@ async def test_linkedin_preview_leaves_details_for_manual_entry(test_db, monkeyp
     preview = await routes.preview_link(
         routes.PostingLink(url="https://www.linkedin.com/jobs/view/98765"), test_db)
     assert preview["note"] and not preview.get("description")
+
+
+def test_word_cv_preview_keeps_document_wording_and_does_not_save(test_db):
+    from io import BytesIO
+    from zipfile import ZipFile
+    from fastapi import UploadFile
+
+    content = BytesIO()
+    with ZipFile(content, "w") as archive:
+        archive.writestr("word/document.xml", """
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+          <w:p><w:r><w:t>sample@example.invalid</w:t></w:r></w:p>
+          <w:p><w:r><w:t>Work Experience</w:t></w:r></w:p>
+          <w:p><w:r><w:t>Led six data scientists.</w:t></w:r></w:p>
+          <w:p><w:r><w:t>Led six data scientists.</w:t></w:r></w:p>
+        </w:body></w:document>""")
+    content.seek(0)
+    response = Response()
+    preview = routes.preview_cv_facts(UploadFile(content, filename="sample.docx"), response)
+    assert preview["facts"] == [
+        {"section": "Email", "text": "sample@example.invalid", "source": "sample.docx · entry 1"},
+        {"section": "Experience", "text": "Led six data scientists.", "source": "sample.docx · entry 3"},
+    ]
+    assert response.headers["Cache-Control"] == "no-store"
+    assert routes.get_profile(test_db) == {"facts": []}

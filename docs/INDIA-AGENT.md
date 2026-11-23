@@ -125,6 +125,16 @@ docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up 
    for the same requisition and flags tracked jobs with the same employer and
    title for review.
 
+### Import verified CV fact candidates
+
+In **Application queue → Verified master CV facts**, expand the section and
+select a Word CV using **Import facts from a Word CV (.docx)**. The local
+backend extracts candidate rows with a document reference. The preview
+leaves saved facts and contact fields intact and adds new rows to the
+editor for review. Correct wording or sections, remove stale facts, add
+your name manually if needed, and confirm before saving. The upload accepts
+Word files up to 5 MB. No hosted model is used.
+
 ### Prepare an application from a link
 
 In **Application queue**, paste a direct job posting URL and click **Load

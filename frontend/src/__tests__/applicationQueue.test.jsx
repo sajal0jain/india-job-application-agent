@@ -38,3 +38,26 @@ it('requires a separate review and submitted confirmation', async () => {
     revision: draft.revision, confirmed: true,
   }))
 })
+
+it('loads a posting, prepares a draft after review, and opens the matching job', async () => {
+  const prefix = '/india-workflow'
+  const id = 'new-job'
+  const posting = { url: 'https://jobs.lever.co/sample/role', title: 'Director of AI',
+    company: 'Sample', location: 'Gurugram', description: 'Lead AI model validation.' }
+  api.get.mockImplementation(async (path) => ({ data: ({
+    [`${prefix}/profile`]: { facts: [{ id: 'one', section: 'Experience', text: 'Led analytics', source: 'CV' }] },
+    [`${prefix}/queue`]: [], '/jobs': { jobs: [] }, [`${prefix}/jobs/${id}`]: posting,
+  })[path] }))
+  api.post.mockResolvedValueOnce({ data: posting }).mockResolvedValueOnce({ data: { job_id: id, draft_created: true } })
+
+  render(<MemoryRouter initialEntries={['/application-queue']}>
+    <Routes><Route path="/application-queue/:jobId?" element={<ApplicationQueue />} /></Routes>
+  </MemoryRouter>)
+  fireEvent.change(await screen.findByLabelText('Job posting URL'), { target: { value: posting.url } })
+  fireEvent.click(screen.getByRole('button', { name: 'Load posting' }))
+  expect((await screen.findByLabelText('Job description from posting')).value).toBe(posting.description)
+  expect(api.post).toHaveBeenCalledExactlyOnceWith(`${prefix}/posting/preview`, { url: posting.url })
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare tailored draft' }))
+  await screen.findByText('Director of AI · Sample')
+  expect(api.post).toHaveBeenLastCalledWith(`${prefix}/posting/prepare`, posting)
+})

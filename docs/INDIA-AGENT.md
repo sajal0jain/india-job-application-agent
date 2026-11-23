@@ -118,11 +118,22 @@ docker compose -p jn-india-phase1 -f docker-compose.yml -f compose.local.yml up 
    The renderer validates page count and extracted fact order. Editing the
    draft or master facts revokes approval. A changed posting requires a
    fresh draft.
-4. Open the employer posting. Attach the reviewed PDF and submit yourself.
+4. Open the employer posting and attach the reviewed PDF. Submit on the
+   employer site or use the extension's confirmed submission for a supported Lever form.
    Select **Log submitted application** only after the employer confirms it.
    The record appears in **Applications**. The queue blocks duplicate records
    for the same requisition and flags tracked jobs with the same employer and
    title for review.
+
+### Prepare an application from a link
+
+In **Application queue**, paste a direct job posting URL and click **Load
+posting**. The app can read title, employer, location and description from
+structured data on a public employer page. If a portal restricts access
+or a field is missing, open the original posting and paste the missing details.
+Confirm the details and click **Prepare tailored draft**. The local matcher
+uses the posting text to select from verified CV facts. An existing draft
+is kept if the same posting is opened again.
 
 ### Optional AI
 
@@ -152,11 +163,20 @@ current dashboard key. The extension uses the key for the loopback request
 and does not store it. Click **Fill approved fields**. The server rechecks
 approval and posting identity. The browser checks that the tab still matches.
 
+For a supported single-page Lever application, attach the reviewed PDF and
+complete any unanswered fields. Reopen the extension on the application page,
+enter the dashboard key again, check the submission confirmation, and click
+**Submit reviewed application**. The native employer submit button is invoked
+only after the app rechecks approval and the exact posting. If the site requires
+another step, complete it on the employer site. Log the application only once
+the employer confirms receipt. Reload the unpacked extension after updating
+the repository.
+
 The extension fills empty, visible, uniquely labelled text controls in the
 active document. Dropdowns, file uploads, embedded forms, and unsupported
 sites are manual. It sets values without dispatching input events, so some
-sites may require you to re-enter values. It presses no employer controls.
-Use it only on employer pages that permit autofill.
+sites may require you to re-enter values. Use it only on employer pages that
+permit the corresponding autofill or submission workflow.
 
 ## Recurring portal and employer discovery
 

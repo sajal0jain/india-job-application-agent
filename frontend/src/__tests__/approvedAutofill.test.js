@@ -38,3 +38,26 @@ it('fills only unique approved empty text controls and never submits', () => {
   expect(document.querySelector('input[type="file"]').value).toBe('')
   expect(submit).not.toHaveBeenCalled()
 })
+
+it('submits a reviewed Lever fixture once and refuses other postings or missing attachments', () => {
+  const target = { origin: 'https://jobs.lever.co', path: '/sample/abc-123', search: '' }
+  const page = { origin: target.origin, pathname: target.path + '/apply', search: '', hash: '' }
+  const submit = new Function('location', script + '\nreturn submitReviewedLeverForm')(page)
+  document.body.innerHTML = `
+    <form method="post" enctype="multipart/form-data" action="https://jobs.lever.co/sample/abc-123/apply">
+      <input type="file" name="resume"><button type="submit">Submit application</button>
+    </form>
+  `
+  const form = document.querySelector('form')
+  const button = form.querySelector('button')
+  const onSubmit = vi.fn((event) => event.preventDefault())
+  form.addEventListener('submit', onSubmit)
+  form.getClientRects = button.getClientRects = () => [{ width: 10, height: 10 }]
+  sessionStorage.clear()
+  expect(submit({ ...target, path: '/another-posting' }).error).toBeTruthy()
+  expect(submit(target).error).toMatch(/Attach/)
+  Object.defineProperty(form.elements.resume, 'files', { value: [new File(['pdf'], 'resume.pdf')] })
+  expect(submit(target)).toEqual({ attempted: true })
+  expect(submit(target).error).toMatch(/already attempted/)
+  expect(onSubmit).toHaveBeenCalledTimes(1)
+})

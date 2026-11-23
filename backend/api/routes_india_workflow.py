@@ -22,6 +22,11 @@ from backend.analyzer.model_json import parse_model_json
 from backend.api.routes_resumes import _render_pdf
 from backend.scraper.alert_intake import employer_link, extract_alert, portal
 from backend.scraper.india_sweep import import_candidates
+from backend.scraper._shared.dedup import make_content_hash, make_external_id
+from backend.scraper._shared.postings import posting_key
+from backend.scraper.posting_preview import preview_posting
+from backend.analyzer.location import apply_location_to_job
+from backend.analyzer.work_arrangement import apply_arrangement_to_job
 from backend.email_monitor.requisition import email_ids, matching_applications
 from backend.email_monitor.response_parser import classify_email
 from backend.models.db import Application, IndiaHiringDetails, IndiaWorkflowDraft, IndiaWorkflowProfile, Job, get_db, record_transition
@@ -239,6 +244,10 @@ async def extract_requirements(payload, text, db):
 
 @router.post("/jobs/{job_id}/match")
 async def match_job(job_id: UUID, payload: MatchInput, db: Session = Depends(get_db)):
+    return await _match_job(job_id, payload, db)
+
+
+async def _match_job(job_id, payload, db, *, only_if_missing=False):
     row = require_profile(db, lock=payload.provider != "local")
     job = get_job(db, job_id)
     description = payload.description or (job.description or "")[:16000]
@@ -269,6 +278,8 @@ async def match_job(job_id: UUID, payload: MatchInput, db: Session = Depends(get
         raise HTTPException(409, "The job or verified facts changed while matching. Run again.")
     analysis = evidence_match(facts, job.title or "", job.location or "", job.arr_remote, requirements)
     draft = get_draft(db, job_id, lock=True)
+    if only_if_missing and (draft is not None or duplicate_applications(db, job).first()):
+        return False
     if draft is None:
         draft = IndiaWorkflowDraft(job_id=job_id)
         db.add(draft)
@@ -410,6 +421,74 @@ class AlertJob(Input):
     company: str = Field(default="", max_length=240)
     location: str = Field(default="", max_length=500)
     description: str = Field(default="", max_length=16000)
+
+
+class PostingLink(Input):
+    url: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
+
+
+def require_posting_link(url):
+    if not employer_link(url):
+        raise HTTPException(422, "Paste a direct HTTPS job posting URL.")
+
+
+def find_posting(db, url):
+    key = posting_key(url)
+    identifiers = [Job.external_id == make_external_id("", "", url)]
+    if key:
+        identifiers.append(Job.posting_key == key)
+    return db.query(Job).filter(or_(*identifiers)).order_by(Job.discovered_at, Job.id).first()
+
+
+@router.post("/posting/preview")
+async def preview_link(payload: PostingLink, db: Session = Depends(get_db)):
+    require_posting_link(payload.url)
+    existing = find_posting(db, payload.url)
+    cached = {field: getattr(existing, field) or "" for field in ("title", "company", "location", "description")} if existing else {}
+    job_id = str(existing.id) if existing else None
+    db.rollback()
+    if cached.get("description"):
+        return {**cached, "url": payload.url, "job_id": job_id, "note": ""}
+    details, note = await preview_posting(payload.url)
+    return {**details, **{key: value for key, value in cached.items() if value},
+            "url": payload.url, "job_id": job_id, "note": note}
+
+
+@router.post("/posting/prepare")
+async def prepare_link(payload: AlertJob, db: Session = Depends(get_db)):
+    require_posting_link(payload.url)
+    job = find_posting(db, payload.url)
+    if job is None:
+        job = Job(url=payload.url, title=payload.title, company=payload.company, location=payload.location or None,
+                  description=payload.description, source="india_alert", status="saved", saved=True, seen=True,
+                  posting_key=posting_key(payload.url),
+                  external_id=make_external_id("", "", payload.url),
+                  content_hash=make_content_hash(payload.company, payload.title))
+        apply_arrangement_to_job(job)
+        apply_location_to_job(job)
+        try:
+            with db.begin_nested():
+                db.add(job)
+                db.flush()
+        except IntegrityError:
+            job = find_posting(db, payload.url)
+            if job is None:
+                raise
+    job_id = job.id
+    existing = get_draft(db, job_id)
+    tracked = duplicate_applications(db, job).first()
+    if not existing and not tracked:
+        for field in ("company", "location", "description"):
+            if not getattr(job, field) and getattr(payload, field):
+                setattr(job, field, getattr(payload, field))
+        apply_arrangement_to_job(job)
+        apply_location_to_job(job)
+    row = profile(db)
+    can_match = bool(row and row.facts and payload.description and not existing and not tracked)
+    db.commit()
+    if can_match:
+        can_match = bool(await _match_job(job_id, MatchInput(description=payload.description), db, only_if_missing=True))
+    return {"job_id": str(job_id), "draft_created": can_match}
 
 
 @router.post("/alerts/preview")

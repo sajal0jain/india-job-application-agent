@@ -13,9 +13,13 @@
   <label>Job ID<input name="job" required></label>
   <label>Dashboard port<input name="port" type="number" value="8088" min="1" max="65535" required></label>
   <label>Dashboard key<input name="key" type="password" autocomplete="off" required></label>
-  <button>Fill approved fields</button>
+  <button value="fill">Fill approved fields</button>
+  <div id="lever-actions" hidden>
+    <label><input type="checkbox" name="confirmSubmit"> I reviewed this completed Lever form, its answers, and the attached PDF. Submit this application now.</label>
+    <button value="submit">Submit reviewed application</button>
+  </div>
 </form>
-<p>Review the form and submit it yourself.</p>
+<p>Review all fields and attach the approved PDF on the employer site.</p>
 <p id="status" role="status"></p>
 <script src="fill.js"></script>
 <script src="popup.js"></script>

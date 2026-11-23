@@ -301,3 +301,48 @@ def test_pasted_linkedin_url_with_trailing_query_marker(test_db, monkeypatch):
     assert [job["url"] for job in routes.alert_preview(routes.AlertText(text=f"{url}\n{second}"))["jobs"]] == [url, second]
     job = routes.AlertJob(url=url, title="Director of Data Science", location="Gurugram")
     assert routes.alert_import(job)["added"] == 1
+
+
+@pytest.mark.asyncio
+async def test_prepare_link_loads_public_posting_and_reuses_draft(candidate, test_db, monkeypatch):
+    import httpx
+    from backend.scraper import posting_preview
+
+    url = "https://jobs.lever.co/example/new-role"
+    page = """<script type="application/ld+json">{"@graph":[{
+      "@type":"JobPosting","title":"Director of Analytics",
+      "hiringOrganization":{"name":"Sample Co"},
+      "jobLocation":{"address":{"addressLocality":"Gurugram"}},
+      "description":"<p>Lead analytics teams.</p><p>Deploy Python pipelines.</p>"
+    }]}</script>"""
+
+    async def fetch(link, **kwargs):
+        return httpx.Response(200, text=page, request=httpx.Request("GET", link))
+
+    monkeypatch.setattr(posting_preview, "safe_get", fetch)
+    preview = await routes.preview_link(routes.PostingLink(url=url), test_db)
+    assert preview["location"] == "Gurugram"
+    assert preview["description"] == "Lead analytics teams.\nDeploy Python pipelines."
+    payload = routes.AlertJob(**{key: preview[key] for key in ("url", "title", "company", "location", "description")})
+
+    first = await routes.prepare_link(payload, test_db)
+    assert first["draft_created"]
+    job_id = routes.UUID(first["job_id"])
+    draft = routes.read_job(job_id, test_db)["draft"]
+    assert not draft["approved"] and draft["analysis"]["points"]["location"] == 20
+    assert await routes.prepare_link(payload, test_db) == {"job_id": first["job_id"], "draft_created": False}
+    assert routes.read_job(job_id, test_db)["draft"]["revision"] == draft["revision"]
+    assert test_db.query(Application).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_linkedin_preview_leaves_details_for_manual_entry(test_db, monkeypatch):
+    from backend.scraper import posting_preview
+
+    async def unexpected(*args, **kwargs):
+        pytest.fail("The preview must leave LinkedIn to the user's browser")
+
+    monkeypatch.setattr(posting_preview, "safe_get", unexpected)
+    preview = await routes.preview_link(
+        routes.PostingLink(url="https://www.linkedin.com/jobs/view/98765"), test_db)
+    assert preview["note"] and not preview.get("description")

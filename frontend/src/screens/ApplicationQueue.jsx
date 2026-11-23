@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link as RouterLink, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import api from '../api'
 import HiringDetails from './HiringDetails'
 import { Button, Card, Heading, Input, Link, PageTitle, Textarea } from '../ui'
@@ -65,6 +65,8 @@ export default function ApplicationQueue() {
     <main className="v2-scroll" style={{ overflow: 'auto', padding: 24, flex: 1, display: 'grid', gap: 12, alignContent: 'start' }}>
       <PageTitle>Application queue</PageTitle>
       {message && <p role="status">{message}</p>}
+      <PreparePosting disabled={!ready || !!busy || profileDirty} hasFacts={!!facts.length}
+        run={run} refreshQueue={refreshQueue} />
       <Card>
         <Heading strong>Verified master CV facts</Heading>
         <details>
@@ -117,6 +119,51 @@ export default function ApplicationQueue() {
         </ul>
       </Card>
     </main>
+  )
+}
+
+function PreparePosting({ disabled, hasFacts, run, refreshQueue }) {
+  const navigate = useNavigate()
+  const [url, setUrl] = useState('')
+  const [posting, setPosting] = useState(null)
+  const update = (field, value) => setPosting((previous) => ({ ...previous, [field]: value }))
+
+  return (
+    <Card>
+      <Heading strong>Prepare an application from a link</Heading>
+      <p>Load the posting, confirm its details, and prepare a draft using your verified CV facts.</p>
+      <Input ariaLabel="Job posting URL" placeholder="https://…" value={url} disabled={disabled}
+        onChange={(value) => { setUrl(value); setPosting(null) }} />
+      <p><Button disabled={disabled || !url.trim()} onClick={() => run('preview', async () => {
+        setPosting(null)
+        const { data } = await api.post(`${PATH}/posting/preview`, { url: url.trim() })
+        setPosting(data)
+      })}>Load posting</Button></p>
+      {posting && <>
+        <Link href={posting.url} target="_blank" rel="noopener noreferrer">Open original posting</Link>
+        {posting.note && <p role="status">{posting.note}</p>}
+        {posting.job_id && <p>This posting is already in Jobs. An existing application draft will be kept.</p>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {[['title', 'Job title', 360], ['company', 'Employer', 240], ['location', 'Job location', 500]].map(([field, label, limit]) =>
+            <Input key={field} ariaLabel={label} placeholder={label} maxLength={limit}
+              value={posting[field] || ''} onChange={(value) => update(field, value)} disabled={disabled} />)}
+        </div>
+        <Textarea ariaLabel="Job description from posting" placeholder="Paste the description if it could not be loaded."
+          value={posting.description || ''} onChange={(value) => update('description', value)}
+          maxLength={16000} rows={6} disabled={disabled} />
+        {!hasFacts && <p>Save your verified CV facts to generate a tailored draft.</p>}
+        <p><Button disabled={disabled || !posting.title?.trim()} onClick={() => run('prepare', async () => {
+          const { data } = await api.post(`${PATH}/posting/prepare`, {
+            url: posting.url, title: posting.title, company: posting.company || '',
+            location: posting.location || '', description: posting.description || '',
+          })
+          await refreshQueue()
+          navigate(`/application-queue/${data.job_id}`)
+          setPosting(null)
+          setUrl('')
+        })}>{hasFacts && posting.description?.trim() ? 'Prepare tailored draft' : 'Open for review'}</Button></p>
+      </>}
+    </Card>
   )
 }
 
@@ -253,7 +300,7 @@ function JobReview({ jobId, facts, busy, run, refreshQueue }) {
           {draft.approved && !dirty && !job.tracked && (
             <>
               {job.target && <p>Open the approved posting, then use the Approved Autofill extension. Job ID <code>{jobId}</code></p>}
-              <p>Attach the reviewed PDF yourself and submit on the employer site.</p>
+              <p>Attach the reviewed PDF on the employer site. For a supported Lever form, use Submit reviewed application in the extension after reviewing the completed form. For other sites, use the employer’s submit button.</p>
               <p><label><input type="checkbox" checked={submitted} disabled={!!busy}
                 onChange={(event) => setSubmitted(event.target.checked)} /> I submitted this application on the employer site.</label></p>
               <Button disabled={!!busy || !submitted} onClick={() => run('track', async () => {

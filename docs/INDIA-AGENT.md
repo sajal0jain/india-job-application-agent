@@ -223,6 +223,41 @@ foreign-only restrictions. Listings retain their original Remotive links and
 source labels. The feed is refreshed at most once every six hours. Remotive
 delays public listings by 24 hours.
 
+## Automatic LinkedIn job alerts
+
+1. In LinkedIn Jobs, turn on **email** alerts for the searches you want to follow.
+   Start with Director or Head of AI, Analytics, and Data Science, plus relevant
+   Manager roles. Use separate alerts for Gurugram or Delhi NCR, Remote India,
+   and international remote roles open to India.
+2. Connect the mailbox that receives the alerts using **Settings → Email classification → Gmail**.
+   If this install has no Gmail OAuth client, enable the Gmail API in Google Cloud
+   and create a Web application OAuth client. Add
+   `http://localhost:8088/api/gmail/callback` as an authorized redirect URI.
+   If the consent screen is in Testing, add your Gmail address as a test user.
+   Put its client ID and secret in the local `.env` as `GMAIL_CLIENT_ID` and
+   `GMAIL_CLIENT_SECRET`, recreate the backend, and connect Gmail from the
+   dashboard opened at `http://localhost:8088`. The connection uses Gmail's
+   read-only scope. OAuth test-mode tokens can expire and require reconnecting.
+3. Add these values to your local `.env` and rerun the Docker Compose startup
+   command to apply them. Keep the file and any credentials out of Git.
+
+   ```dotenv
+   JN_INDIA_LINKEDIN_ALERTS=1
+   JN_INDIA_SWEEP_HOURS=6
+   ```
+
+4. In **Searches → Find leadership jobs**, click **Find jobs** for a first scan.
+   **Last search details** reports the alert count, imports, and duplicates.
+   Subsequent sweeps run on the configured interval while Docker is running.
+
+The owner’s sweep checks up to 50 recent emails (14 days) from LinkedIn's job
+alert sender. It extracts titled direct posting links, filters for leadership
+roles, and deduplicates repeats by LinkedIn posting ID. Results can lack
+employer, location, or full posting text. Confirm eligibility on the posting
+and paste its description into the Application Queue for CV matching. Matches
+enter the feed as new jobs for review. The scanner only contacts Google and
+its coverage depends on the alerts LinkedIn sends to the connected mailbox.
+
 ## Job alerts and CV ranking
 
 **Searches → Import a job alert** accepts a single employer posting URL, pasted alert content, or an email

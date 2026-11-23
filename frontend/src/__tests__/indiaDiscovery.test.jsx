@@ -61,3 +61,23 @@ it('runs the simple search without configuring boards and displays recent discov
   expect(await screen.findByRole('link', { name: 'Director of AI' })).toHaveProperty('pathname', '/application-queue/123')
   expect(await screen.findByText('1 new job added.')).toBeTruthy()
 })
+
+it('includes Gmail-sourced LinkedIn alerts in recent discoveries and shows scan counts', async () => {
+  api.get.mockImplementation(async (path) => ({ data: path === '/jobs'
+    ? { jobs: [{ id: '456', title: 'Head of Data Science', source: 'india_linkedin_alert_review' }] }
+    : {
+      boards: 0, portals: ['LinkedIn job alerts'], enabled_hours: 6, running: false,
+      last: {
+        finished_at: '2026-11-23T00:00:00Z',
+        sources: [{ source: 'LinkedIn job alerts', emails: 2, received: 3, added: 1, duplicate: 1 }],
+      },
+    } }))
+
+  render(<JobSearch />)
+
+  expect(await screen.findByRole('link', { name: 'Head of Data Science' })).toBeTruthy()
+  expect(screen.getByText(/Confirm location eligibility/)).toBeTruthy()
+  expect(await screen.findByText(/2 alert emails checked · 3 posting links found/)).toBeTruthy()
+  const [, request] = api.get.mock.calls.find(([path]) => path === '/jobs')
+  expect(request.params.source.split(',')).toContain('india_linkedin_alert_review')
+})

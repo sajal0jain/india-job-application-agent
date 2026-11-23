@@ -87,7 +87,7 @@ export default function IndiaDiscovery() {
   )
 }
 
-const DISCOVERY_SOURCES = ['employer', 'adzuna', 'jooble', 'remotive', 'alert']
+const DISCOVERY_SOURCES = ['employer', 'adzuna', 'jooble', 'remotive', 'alert', 'linkedin_alert']
   .flatMap((source) => [`india_${source}`, `india_${source}_review`]).join(',')
 
 export function JobSearch() {
@@ -163,6 +163,7 @@ export function JobSearch() {
         <p>Remotive runs on demand. {status.boards} employer boards configured
           {status.portals.length ? ` · ${status.portals.join(', ')}` : ''}.
           {' '}{status.enabled_hours ? `Automatic sweeps run every ${status.enabled_hours} hours while Docker is running.` : 'Scheduled sweeps are off.'}</p>
+        {status.portals.includes('LinkedIn job alerts') && <p>LinkedIn jobs come from alerts sent to the Gmail account connected in Settings.</p>}
         <EmployerWatchlist onSave={(boards) => setStatus((previous) => ({ ...previous, boards }))} />
       </details>}
       <div aria-live="polite">
@@ -175,6 +176,8 @@ export function JobSearch() {
               <p>{new Date(finishedAt).toLocaleString()}</p>
               <ul>{status.last.sources.map((source, index) => <li key={index}>
                 {source.source} · {source.added || 0} added · {source.duplicate || 0} already seen
+                {source.emails != null && ` · ${source.emails} alert emails checked · ${source.received} posting links found`}
+                {!!source.unreadable_emails && ` · ${source.unreadable_emails} unreadable emails`}
                 {!!source.capped_queries && ` · ${source.capped_queries} queries reached the page limit`}
                 {source.error && ` · ${source.error}`}{source.note && ` · ${source.note}`}
               </li>)}</ul>

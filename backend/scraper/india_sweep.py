@@ -14,6 +14,7 @@ from backend.accounts.context import owner_context, run_in_clean_context
 from backend.accounts.settings import get_install_setting
 from backend.analyzer.location import apply_location_to_job
 from backend.analyzer.work_arrangement import apply_arrangement_to_job
+from backend.email_monitor.linkedin_alerts import linkedin_alerts
 from backend.models.db import Job, SessionLocal
 from backend.scraper._shared.dedup import make_content_hash, make_external_id
 from backend.scraper._shared.html_text import html_to_text
@@ -66,6 +67,10 @@ def environment_boards():
 
 def remotive_enabled():
     return os.getenv("JN_INDIA_REMOTIVE", "").strip() == "1"
+
+
+def linkedin_alerts_enabled():
+    return os.getenv("JN_INDIA_LINKEDIN_ALERTS", "").strip() == "1"
 
 
 def portal_credentials():
@@ -191,6 +196,16 @@ async def sweep(*, include_remote=False):
             report.append({"source": label, "error": "Could not search this board. Check the URL and access."})
         await asyncio.sleep(1)
 
+    if linkedin_alerts_enabled():
+        entry = {"source": "LinkedIn job alerts"}
+        report.append(entry)
+        try:
+            rows, scan = await asyncio.wait_for(linkedin_alerts(), timeout=90)
+            entry.update(scan, received=len(rows), **import_candidates(rows, "india_linkedin_alert"))
+        except Exception as error:
+            logger.warning("LinkedIn alert scan failed (%s)", type(error).__name__)
+            entry["error"] = "Could not read LinkedIn job alerts from Gmail. Check the connection and try again."
+
     pages = portal_pages()
     async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         if include_remote or remotive_enabled():
@@ -239,7 +254,7 @@ class IndiaSweep:
         self.last = None
 
     def configured(self):
-        return bool(employer_boards() or remotive_enabled() or any(all(keys) for keys in portal_credentials().values()))
+        return bool(employer_boards() or remotive_enabled() or linkedin_alerts_enabled() or any(all(keys) for keys in portal_credentials().values()))
 
     def start(self):
         hours = schedule_hours()
@@ -282,6 +297,8 @@ class IndiaSweep:
         portals = [PORTAL_LABELS[source] for source, keys in portal_credentials().items() if all(keys)]
         if remotive_enabled():
             portals.append("Remotive")
+        if linkedin_alerts_enabled():
+            portals.append("LinkedIn job alerts")
         return {"enabled_hours": schedule_hours(), "boards": len(employer_boards()),
                 "portals": portals,
                 "running": bool(self.run and not self.run.done()), "last": self.last}
